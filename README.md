@@ -126,18 +126,57 @@ poetry install
 
 ## Usage
 
-To run the data crawler and populate your database, execute the following command from the project's root directory:
+This project has two main scripts:
+
+### 1. Initial Data Backfill (`main.py`)
+
+This script is used to perform the initial, large-scale import of the last five years of stock data. You should only need to run this once.
 
 ```bash
 poetry run python main.py
 ```
 
-The script will perform the following actions:
-1.  Print "Fetching stock data..."
-2.  Fetch five years of data for all stocks (this can take a very long time).
-3.  Print "Connecting to the database..."
-4.  Save the data to the `taiwan_stock_daily` table in your database. If the table already exists, it will be replaced.
-5.  Print "Done." when finished.
+The script will:
+1.  Fetch five years of data for all stocks (this can take a very long time).
+2.  Connect to the database.
+3.  Save the data to the `taiwan_stock_daily` table, **replacing** it if it already exists.
+
+### 2. Daily Data Update (`daily_update.py`)
+
+This script is designed to be run daily to fetch the latest trading data and append it to the existing database.
+
+```bash
+poetry run python daily_update.py
+```
+
+The script includes the following logic:
+- It will exit if run on a weekend.
+- It checks the database to see if data for the current day already exists. If so, it exits.
+- It fetches the data for the current day.
+- It validates that the fetched data is for the correct date before saving.
+- It **appends** the new data to the `taiwan_stock_daily` table.
+
+### Automating the Daily Update (Cron Job)
+
+To run the `daily_update.py` script automatically, you can set up a cron job. The following example will run the script at 5:00 PM (17:00) every Monday through Friday.
+
+1.  Open your crontab for editing:
+    ```bash
+    crontab -e
+    ```
+
+2.  Add the following line to the file. **Make sure to replace `/path/to/your/project` with the absolute path to this project's directory.**
+
+    ```crontab
+    # Run the Taiwan stock daily update script every weekday at 5 PM
+    0 17 * * 1-5 cd /path/to/your/project && /usr/bin/poetry run python daily_update.py >> /path/to/your/project/cron.log 2>&1
+    ```
+
+    **Crontab Breakdown:**
+    - `0 17 * * 1-5`: Runs at 17:00 (5 PM) on every day-of-week from Monday (1) to Friday (5).
+    - `cd /path/to/your/project`: Changes the current directory to your project's root. This is crucial for the script to find the `config.ini` and its modules.
+    - `/usr/bin/poetry run python daily_update.py`: Executes the script using the correct Poetry environment. You might need to adjust the path to your poetry executable (`which poetry`).
+    - `>> /path/to/your/project/cron.log 2>&1`: Redirects all output (both stdout and stderr) to a log file named `cron.log` within your project directory. This is highly recommended for debugging.
 
 ## Troubleshooting
 
