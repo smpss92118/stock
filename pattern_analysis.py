@@ -3,8 +3,8 @@ import numpy as np
 import os
 
 # --- Configuration ---
-INPUT_FILE = 'stock/2023_2025_daily_stock_info.csv'
-OUTPUT_FILE = 'stock/pattern_analysis_result.csv'
+INPUT_FILE = './2023_2025_daily_stock_info.csv'
+OUTPUT_FILE = './pattern_analysis_result.csv'
 WINDOW_DAYS = 126  # Approx 6 months
 
 # Column mapping
