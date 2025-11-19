@@ -5,9 +5,9 @@ from .utils import get_zigzag_pivots
 def detect_vcp(window,
                vol_ma50_val, # Scalar
                price_ma50_val, # Scalar
-               zigzag_threshold=0.04, # Tightened from 0.05
-               min_up_ratio=0.5, # Increased from 0.4
-               vol_dry_up_ratio=0.6):
+               zigzag_threshold=0.05, # Back to 0.05 to reduce noise
+               min_up_ratio=0.5, # Keep 0.5
+               vol_dry_up_ratio=0.5): # Stricter volume (0.6 -> 0.5)
 
     high = window['high'].values
     low = window['low'].values
