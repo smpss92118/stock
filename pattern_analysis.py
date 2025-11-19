@@ -72,7 +72,7 @@ def main():
             change_pct = (row_today['close'] / prev_close - 1.0) if (i > 0 and prev_close != 0) else np.nan
             
             # Detect Patterns
-            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50']) 
+            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50']) 
             is_htf, htf_buy, htf_stop = detect_htf(window)
             is_cup, cup_buy, cup_stop = detect_cup(window, ma_info)
             

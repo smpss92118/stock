@@ -4,8 +4,9 @@ from .utils import get_zigzag_pivots
 
 def detect_vcp(window,
                vol_ma50_val, # Scalar
-               zigzag_threshold=0.05,
-               min_up_ratio=0.4, 
+               price_ma50_val, # Scalar
+               zigzag_threshold=0.04, # Tightened from 0.05
+               min_up_ratio=0.5, # Increased from 0.4
                vol_dry_up_ratio=0.6):
 
     high = window['high'].values
@@ -18,6 +19,10 @@ def detect_vcp(window,
 
     start_price = close[0]
     if start_price == 0: return False, np.nan, np.nan
+    
+    # 0. Trend Filter: Price > MA50 (if available)
+    if not np.isnan(price_ma50_val) and close[-1] < price_ma50_val:
+        return False, np.nan, np.nan
     window_high = high.max()
     window_high_idx = high.argmax()
     
