@@ -68,4 +68,26 @@
     - VCP 優化成功，建議維持此參數組合。
     - 下一步可考慮優化 CUP 或 HTF，或針對 VCP 進行更細微的參數微調 (如 3 legs 強制要求)。
 
+## Cycle 3: Market Trend Integration (大盤趨勢過濾)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: VCP
+    - **New Filter**: `Market Price > Market MA200` (使用 TAIEX 指數)
+    - **Parameters**: 其他參數維持 Cycle 2 設定
+- **Results (Limited Capital)**:
+    - **VCP (Trig=1.5R, Trail=MA20)**:
+        - Return: **81.5%** (Dropped from 150.2% in Cycle 2)
+        - Sharpe: **0.83** (Improved from 0.64)
+        - Win Rate: **29.3%** (Improved from 25.5%)
+        - Max DD: -15.7% (Slightly worse than -13.4%)
+        - Count: 314
+- **Analysis**:
+    - 加入大盤 MA200 過濾後，雖然勝率和夏普比率提升（交易更穩健），但總報酬率大幅下降。
+    - **原因推測**：MA200 是長期趨勢指標，反應較慢。許多強勢股在大盤尚未站上 MA200 時就已發動（例如市場從底部反轉初期），此過濾條件導致錯失了這些獲利最豐厚的早期波段。
+    - **Limited Capital 觀點**：在資金有限情況下，雖然我們希望避開空頭，但過於保守的濾網會減少資金運用效率。
+- **Conclusion**:
+    - MA200 過濾過於嚴格/滯後，不適合追求高報酬。
+    - 建議嘗試較靈敏的市場濾網 (如 Market > MA50) 或改用個股相對強度 (RS) 過濾。
+    - 下一步 (Cycle 4) 將嘗試移除市場濾網，改為加入 **RS (Relative Strength)** 過濾，確保個股強於大盤。
+
 ---

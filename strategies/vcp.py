@@ -5,6 +5,7 @@ from .utils import get_zigzag_pivots
 def detect_vcp(window,
                vol_ma50_val, # Scalar
                price_ma50_val, # Scalar
+               market_trend=None, # Dict: {'close', 'ma200', 'is_uptrend'}
                zigzag_threshold=0.05, # Back to 0.05 to reduce noise
                min_up_ratio=0.5, # Keep 0.5
                vol_dry_up_ratio=0.5): # Stricter volume (0.6 -> 0.5)
@@ -16,6 +17,12 @@ def detect_vcp(window,
     
     n = len(window)
     if n < 50: return False, np.nan, np.nan
+
+    # 0. Market Trend Filter (New in Cycle 3)
+    # Require Market Price > Market MA200
+    if market_trend is not None:
+        if not market_trend['is_uptrend']:
+            return False, np.nan, np.nan
 
     start_price = close[0]
     if start_price == 0: return False, np.nan, np.nan

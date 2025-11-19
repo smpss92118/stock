@@ -6,15 +6,29 @@ from strategies import detect_htf, detect_vcp, detect_cup, eval_R_outcome
 # --- Configuration ---
 INPUT_FILE = './2023_2025_daily_stock_info.csv'
 OUTPUT_FILE = './pattern_analysis_result.csv'
+MARKET_FILE = './market_data.csv'
 WINDOW_DAYS = 126  # Approx 6 months
 
 # Column mapping
 COL_NAMES = ['sid', 'name', 'date', 'open', 'high', 'low', 'close', 'volume']
 
+def load_market_data():
+    if not os.path.exists(MARKET_FILE):
+        return None
+    df = pd.read_csv(MARKET_FILE)
+    # Ensure date is string YYYY-MM-DD
+    return df.set_index('date')
+
 def main():
     if not os.path.exists(INPUT_FILE):
         print(f"Error: Input file {INPUT_FILE} not found.")
         return
+
+    market_df = load_market_data()
+    if market_df is None:
+        print("Warning: Market data not found. Proceeding without market filter.")
+    else:
+        print("Market data loaded.")
 
     print("Loading data...", flush=True)
     df = pd.read_csv(INPUT_FILE, header=None, names=COL_NAMES + [f'col_{i}' for i in range(8, 20)]) 
@@ -71,10 +85,23 @@ def main():
             else: dd = 1.0 - row_today['close'] / window_high
             change_pct = (row_today['close'] / prev_close - 1.0) if (i > 0 and prev_close != 0) else np.nan
             
+            # Market Trend Info
+            market_trend = None
+            if market_df is not None:
+                date_str = row_today['date']
+                if date_str in market_df.index:
+                    m_row = market_df.loc[date_str]
+                    # Define trend: Close > MA200?
+                    market_trend = {
+                        'close': m_row['close'],
+                        'ma200': m_row['market_ma200'],
+                        'is_uptrend': m_row['close'] > m_row['market_ma200']
+                    }
+            
             # Detect Patterns
-            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50']) 
-            is_htf, htf_buy, htf_stop = detect_htf(window)
-            is_cup, cup_buy, cup_stop = detect_cup(window, ma_info)
+            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], market_trend) 
+            is_htf, htf_buy, htf_stop = detect_htf(window) # Can add market_trend later
+            is_cup, cup_buy, cup_stop = detect_cup(window, ma_info) # Can add market_trend later
             
             # ... (Outcome Eval) ...
             vcp_2R = vcp_3R = vcp_4R = vcp_stop_hit = False
