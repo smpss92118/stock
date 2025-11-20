@@ -48,11 +48,11 @@
 ---
 
 ## Top 3 Strategies (Ann. Return %) - Limited Capital
-- **is_cup (Limited)** (R=3.0, T=20): Ann. Return 99.2%, Sharpe 2.2
+- **is_cup (Limited)** (R=3.0, T=20): Ann. Return 98.2%, Sharpe 2.19
 - **is_cup (Limited)** (R=2.0, T=20): Ann. Return 69.0%, Sharpe 2.14
-- **is_htf (Limited)** (Trig=1.5R, Trail=ma20): Ann. Return 57.5%, Sharpe 0.76
+- **is_htf (Limited)** (Trig=1.5R, Trail=ma20): Ann. Return 57.4%, Sharpe 0.76
 
 ## Top 3 Strategies (Sharpe) - Limited Capital
-- **is_cup (Limited)** (R=3.0, T=20): Sharpe 2.2, Ann. Return 99.2%
+- **is_cup (Limited)** (R=3.0, T=20): Sharpe 2.19, Ann. Return 98.2%
 - **is_cup (Limited)** (R=2.0, T=20): Sharpe 2.14, Ann. Return 69.0%
-- **is_cup (Limited)** (R=2.0, T=60): Sharpe 1.31, Ann. Return 37.9%
+- **is_cup (Limited)** (R=2.0, T=60): Sharpe 1.28, Ann. Return 37.1%

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
-from tqdm import tqdm  # 需要安裝: pip install tqdm
+from tqdm import tqdm
 import time
 
 # 添加 src 到路徑
@@ -31,9 +31,7 @@ def load_market_data_as_dict():
     if not os.path.exists(MARKET_FILE):
         return None
     df = pd.read_csv(MARKET_FILE)
-    # Ensure valid index
     df = df.set_index('date')
-    # Convert to dictionary: {date: {col: value}}
     return df.to_dict(orient='index')
 
 def load_data():
@@ -52,26 +50,30 @@ def load_data():
 
 def process_single_stock(args):
     """
-    Worker function to process a single stock group.
-    args: (sid, group_df, market_data_dict)
+    保守優化版: 只優化明確安全的部分
+    - 使用 NumPy arrays 進行讀取（不改變計算邏輯）
+    - 增加 chunksize
+    - 其他邏輯完全保持不變
     """
     sid, g, market_dict = args
     results = []
     n_rows = len(g)
     
-    # 如果資料長度不足，直接返回空列表
     if n_rows < WINDOW_DAYS:
         return results
 
-    # 為了加速，將常用的 column 轉為 numpy array 或直接提取 series
-    # 但因為策略函數 (detect_cup 等) 可能依賴 DataFrame 結構，
-    # 我們保留 window 為 DataFrame，但在迴圈外的 lookup 做優化。
+    # === 僅此優化：將欄位轉為 NumPy arrays 以加速「讀取」（不改變計算） ===
+    # 注意：我們仍然保留 DataFrame g 給策略函數使用
+    closes_arr = g['close'].values
+    highs_arr = g['high'].values
+    lows_arr = g['low'].values
+    dates_arr = g['date'].values
     
     # Iterate through the required range
     for i in range(WINDOW_DAYS - 1, n_rows):
-        # Slice window (This is the heavy part, but required by strategy logic)
+        # === 保持原始邏輯：仍然切片 DataFrame ===
         window = g.iloc[i - WINDOW_DAYS + 1 : i + 1]
-        row_today = g.iloc[i]
+        row_today = g.iloc[i]  # 仍然使用 iloc，確保邏輯完全一致
         
         # Prepare MA info for CUP
         ma_info = {
@@ -82,9 +84,9 @@ def process_single_stock(args):
         }
         
         # Basic info
-        # i > 0 is guaranteed by loop range (WINDOW_DAYS >= 126)
         prev_close = g.iloc[i-1]['close'] 
         
+        # === 保持原始邏輯：window['high'].max() ===
         window_high = window['high'].max()
         if window_high == 0: 
             dd = 0
@@ -94,21 +96,15 @@ def process_single_stock(args):
         change_pct = (row_today['close'] / prev_close - 1.0) if prev_close != 0 else np.nan
         
         # Market Trend & RS Info
-        rs_rating = row_today['rs_rating'] # Pre-calculated
+        rs_rating = row_today['rs_rating']
         
-        # 這裡不使用 rs_rating 進行 market trend 判斷，只保留原邏輯
         if market_dict is not None:
             date_str = row_today['date']
-            # Dict lookup is O(1), much faster than df.loc
             m_row = market_dict.get(date_str)
-            # 原程式碼中雖然提取了 m_row，但在 detect_vcp 傳入參數時並沒有用到 m_row 的內容
-            # 僅傳入了 rs_rating。若策略內部有用到 market_trend，請確認策略函數定義。
-            # 根據您提供的代碼，detect_vcp 只吃了 high_52w 和 rs_rating。
         
         # Detect Patterns
         high_52w = row_today['high_52w']
         
-        # 呼叫策略
         is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], rs_rating=rs_rating, high_52w=high_52w) 
         is_htf, htf_buy, htf_stop, htf_grade = detect_htf(window, rs_rating=rs_rating) 
         is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
@@ -118,7 +114,6 @@ def process_single_stock(args):
         htf_2R = htf_3R = htf_4R = htf_stop_hit = False
         cup_2R = cup_3R = cup_4R = cup_stop_hit = False
 
-        # eval_R_outcome 內部可能會有迴圈，傳入 g 和 current index i
         if is_vcp:
             vcp_2R, vcp_3R, vcp_4R, vcp_stop_hit = eval_R_outcome(g, i, vcp_buy, vcp_stop)
         if is_htf:
@@ -126,13 +121,14 @@ def process_single_stock(args):
         if is_cup:
             cup_2R, cup_3R, cup_4R, cup_stop_hit = eval_R_outcome(g, i, cup_buy, cup_stop)
 
+        # === 僅此優化：使用 array 讀取以加速（值完全相同） ===
         results.append({
             'sid': sid,
-            'date': row_today['date'],
+            'date': dates_arr[i],  # 使用 array（值相同）
             'dd': dd,
-            'high': row_today['high'],
-            'low': row_today['low'],
-            'close': row_today['close'],
+            'high': highs_arr[i],  # 使用 array（值相同）
+            'low': lows_arr[i],    # 使用 array（值相同）
+            'close': closes_arr[i], # 使用 array（值相同）
             'change_pct': change_pct,
             'is_vcp': is_vcp, 'vcp_buy_price': vcp_buy, 'vcp_stop_price': vcp_stop,
             'vcp_2R': vcp_2R, 'vcp_3R': vcp_3R, 'vcp_4R': vcp_4R, 'vcp_stop': vcp_stop_hit,
@@ -145,12 +141,14 @@ def process_single_stock(args):
     return results
 
 def main():
+    start_time = time.time()
+    
     # 1. Load Data
     market_dict = load_market_data_as_dict()
     if market_dict is None:
         print("Warning: Market data not found.")
     else:
-        print("Market data loaded (Optimized into Dict).")
+        print(f"Market data loaded ({len(market_dict)} dates).")
 
     df = load_data()
     if df is None:
@@ -185,10 +183,7 @@ def main():
     df.dropna(subset=['sid', 'date', 'close'], inplace=True)
     
     # Indicators
-    grouped_iterator = df.groupby('sid')
-    
-    # 為了確保 transform 正確，我們先計算指標再拆分
-    # 其實直接在這裡全域計算比在 loop 裡安全且快
+    print("Calculating moving averages...", flush=True)
     df['ma50'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(50).mean())
     df['ma150'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(150).mean())
     df['ma200'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(200).mean())
@@ -198,39 +193,51 @@ def main():
     # 3. Prepare for Parallel Processing
     print("Preparing tasks for parallel processing...", flush=True)
     
-    # 將 DataFrame 依照 sid 拆分成小塊 (Group)
-    # list of (sid, group_df)
-    # reset_index(drop=True) is important for logic relying on integer indexing (0 to N)
     tasks = []
     for sid, group in df.groupby('sid'):
         tasks.append((sid, group.reset_index(drop=True), market_dict))
 
     total_stocks = len(tasks)
-    print(f"Starting analysis on {total_stocks} stocks using Multiprocessing...", flush=True)
+    # === 優化：使用更多核心 ===
+    max_workers = max(1, os.cpu_count() - 1) if os.cpu_count() else None
+    print(f"Starting analysis on {total_stocks} stocks using {max_workers or 'all'} workers...", flush=True)
     
     all_results = []
     
     # 使用 ProcessPoolExecutor 進行平行運算
-    # max_workers 預設為 CPU 核心數，這通常是最佳設定
-    with ProcessPoolExecutor() as executor:
-        # 使用 tqdm 包裹 executor.map 以顯示進度條
+    # === 優化：增加 chunksize 減少進程間通訊開銷 ===
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
         results_generator = list(tqdm(
-            executor.map(process_single_stock, tasks), 
+            executor.map(process_single_stock, tasks, chunksize=10), 
             total=total_stocks, 
             unit="stock",
-            desc="Processing"
+            desc="Processing",
+            ncols=100
         ))
         
-        # 合併結果
         for res in results_generator:
             all_results.extend(res)
 
     # 4. Save Results
-    print("Saving results...", flush=True)
-    result_df = pd.DataFrame(all_results)
-    result_df.to_csv(OUTPUT_FILE, index=False)
-    print(f"Done. Saved to {OUTPUT_FILE}", flush=True)
+    print(f"\nSaving {len(all_results)} results...", flush=True)
+    
+    if all_results:
+        result_df = pd.DataFrame(all_results)
+        os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+        result_df.to_csv(OUTPUT_FILE, index=False)
+        print(f"Done. Saved to {OUTPUT_FILE}", flush=True)
+        
+        # 統計資訊
+        print(f"\nSummary:")
+        print(f"  Total records: {len(result_df)}")
+        print(f"  VCP patterns: {result_df['is_vcp'].sum()}")
+        print(f"  HTF patterns: {result_df['is_htf'].sum()}")
+        print(f"  CUP patterns: {result_df['is_cup'].sum()}")
+    else:
+        print("Warning: No results generated.")
+    
+    elapsed = time.time() - start_time
+    print(f"\n⏱️  Total execution time: {elapsed:.2f} seconds ({elapsed/60:.1f} minutes)")
 
 if __name__ == "__main__":
-    # Windows 下使用 Multiprocessing 必須在 if __name__ == "__main__": 之下執行
     main()

@@ -17,17 +17,14 @@ def run_script(script_name):
     print(f"\n>>> Running {script_name}...")
     
     try:
+        # Don't capture output to allow tqdm and real-time progress display
         result = subprocess.run(
             [sys.executable, script_path], 
-            check=True, 
-            capture_output=True, 
-            text=True
+            check=True
         )
-        print(result.stdout)
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error running {script_name}:")
-        print(e.stderr)
+        print(f"❌ Error running {script_name}")
         return False
 
 def generate_report_content():
