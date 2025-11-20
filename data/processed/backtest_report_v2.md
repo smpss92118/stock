@@ -1,5 +1,5 @@
 # Backtest Report V2
-Generated: 2025-11-20 20:19:46.030022
+Generated: 2025-11-20 23:47:22.369822
 
 | Strategy           | Settings              |   Ann. Return % |   Return % |   Sharpe |   Trades |   Win Rate |
 |:-------------------|:----------------------|----------------:|-----------:|---------:|---------:|-----------:|

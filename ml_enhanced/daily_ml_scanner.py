@@ -32,10 +32,17 @@ from src.strategies.htf import detect_htf
 from src.strategies.cup import detect_cup
 from src.strategies.vcp import detect_vcp
 
+# Import shared modules
+from src.utils.logger import setup_logger
+from src.ml.features import extract_ml_features
+
 # Configuration
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models/stock_selector.pkl')
 FEATURE_INFO_PATH = os.path.join(os.path.dirname(__file__), 'models/feature_info.pkl')
 OUTPUT_BASE = os.path.join(os.path.dirname(__file__), 'daily_reports')
+
+# Setup Logger
+logger = setup_logger('daily_ml_scanner')
 
 def load_ml_model():
     """載入 ML 模型"""
@@ -46,41 +53,8 @@ def load_ml_model():
             feature_info = pickle.load(f)
         return model, feature_info['feature_cols']
     except Exception as e:
-        print(f"⚠️ ML 模型載入失敗: {e}")
+        logger.error(f"⚠️ ML 模型載入失敗: {e}")
         return None, None
-
-def calculate_ml_features(row, pattern_type):
-    """計算 ML 特徵 (簡化版)"""
-    buy_price = row.get(f'{pattern_type}_buy_price', 0)
-    stop_price = row.get(f'{pattern_type}_stop_price', 0)
-    current_price = row['close']
-    
-    # Grade
-    if pattern_type == 'htf':
-        grade = row.get('htf_grade', 'C')
-        grade_map = {'A': 3, 'B': 2, 'C': 1}
-        grade_numeric = grade_map.get(grade, 1)
-    else:
-        grade_numeric = 2
-    
-    # Calculate features
-    distance_to_buy_pct = (buy_price - current_price) / current_price * 100 if buy_price > 0 else 0
-    risk_pct = (buy_price - stop_price) / buy_price * 100 if buy_price > 0 and stop_price > 0 else 0
-    
-    features = {
-        'grade_numeric': grade_numeric,
-        'distance_to_buy_pct': distance_to_buy_pct,
-        'risk_pct': risk_pct,
-        'rsi_14': 50,  # Simplified
-        'ma_trend': 1,
-        'volatility': 0.02,
-        'atr_ratio': 0.02,
-        'market_trend': 1,
-        'signal_count_ma10': 0,
-        'signal_count_ma60': 0
-    }
-    
-    return features
 
 def predict_signal_quality(model, feature_cols, features_dict):
     """預測訊號品質"""
@@ -92,16 +66,16 @@ def predict_signal_quality(model, feature_cols, features_dict):
         proba = model.predict_proba(X)[0][1]
         return proba
     except Exception as e:
-        print(f"    ⚠️ ML 預測失敗: {e}")
+        logger.warning(f"    ⚠️ ML 預測失敗: {e}")
         return 0.5
 
 def scan_with_ml(df, model, feature_cols):
     """掃描並添加 ML 評分"""
     latest_date = df['date'].max()
-    print(f"\n掃描日期: {latest_date}")
+    logger.info(f"\n掃描日期: {latest_date}")
     
     latest_stocks = df[df['date'] == latest_date]['sid'].unique()
-    print(f"股票數量: {len(latest_stocks)}")
+    logger.info(f"股票數量: {len(latest_stocks)}")
     
     signals = []
     processed = 0
@@ -109,7 +83,7 @@ def scan_with_ml(df, model, feature_cols):
     for sid in latest_stocks:
         processed += 1
         if processed % 100 == 0:
-            print(f"已處理 {processed}/{len(latest_stocks)} 檔股票...")
+            logger.info(f"已處理 {processed}/{len(latest_stocks)} 檔股票...")
         
         stock_df = df[df['sid'] == sid].reset_index(drop=True)
         n_rows = len(stock_df)
@@ -133,12 +107,17 @@ def scan_with_ml(df, model, feature_cols):
         }
         
         rs_rating = row_today.get('rs_rating', 0)
-        high_52w = row_today.get('high_52w', row_today['high'])
         
         # Detect HTF
         is_htf, htf_buy, htf_stop, htf_grade = detect_htf(window, rs_rating=rs_rating)
         if is_htf and htf_buy and htf_stop and row_today['close'] > htf_stop:
-            features = calculate_ml_features(row_today, 'htf')
+            # Add temporary pattern info to row for feature extraction
+            row_today_htf = row_today.copy()
+            row_today_htf['htf_buy_price'] = htf_buy
+            row_today_htf['htf_stop_price'] = htf_stop
+            row_today_htf['htf_grade'] = htf_grade
+            
+            features = extract_ml_features(row_today_htf, 'htf')
             ml_proba = predict_signal_quality(model, feature_cols, features)
             
             signals.append({
@@ -160,7 +139,12 @@ def scan_with_ml(df, model, feature_cols):
         # Detect CUP
         is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
         if is_cup and cup_buy and cup_stop and row_today['close'] > cup_stop:
-            features = calculate_ml_features(row_today, 'cup')
+            # Add temporary pattern info to row for feature extraction
+            row_today_cup = row_today.copy()
+            row_today_cup['cup_buy_price'] = cup_buy
+            row_today_cup['cup_stop_price'] = cup_stop
+            
+            features = extract_ml_features(row_today_cup, 'cup')
             ml_proba = predict_signal_quality(model, feature_cols, features)
             
             signals.append({
@@ -356,7 +340,7 @@ def generate_ml_report(signals, scan_date, df_full=None):
                 else:
                     f.write("過去一週無數據記錄。\n\n")
             except Exception as e:
-                print(f"⚠️ 讀取歷史訊號錯誤: {e}")
+                logger.error(f"⚠️ 讀取歷史訊號錯誤: {e}")
                 f.write(f"⚠️ 讀取歷史訊號時發生錯誤: {str(e)}\n\n")
             
             f.write("---\n\n")
@@ -400,55 +384,55 @@ def generate_ml_report(signals, scan_date, df_full=None):
                               'risk_pct', 'grade', 'current_price', 'distance_pct', 
                               'ml_proba', 'ml_selected', 'rs_rating']).to_csv(csv_path, index=False)
     
-    print(f"\n✅ ML 報告已儲存至: {report_path}")
-    print(f"✅ CSV 已儲存至: {csv_path}")
+    logger.info(f"\n✅ ML 報告已儲存至: {report_path}")
+    logger.info(f"✅ CSV 已儲存至: {csv_path}")
     
     # 顯示摘要
-    print(f"\n{'='*60}")
-    print(f"ML 推薦訊號統計")
-    print(f"{'='*60}")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"ML 推薦訊號統計")
+    logger.info(f"{'='*60}")
     if not df_signals.empty:
-        print(f"HTF (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'HTF'])} 檔")
-        print(f"CUP (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'CUP'])} 檔")
-        print(f"總計推薦: {len(ml_selected)} 檔")
+        logger.info(f"HTF (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'HTF'])} 檔")
+        logger.info(f"CUP (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'CUP'])} 檔")
+        logger.info(f"總計推薦: {len(ml_selected)} 檔")
     else:
-        print(f"本日無訊號")
+        logger.info(f"本日無訊號")
 
 def main():
-    print("="*60)
-    print("ML-Enhanced Daily Stock Scanner")
-    print("="*60)
+    logger.info("="*60)
+    logger.info("ML-Enhanced Daily Stock Scanner")
+    logger.info("="*60)
     
     # 1. 更新數據
-    print("\n>>> 更新每日數據...")
+    logger.info("\n>>> 更新每日數據...")
     try:
         update_data()
     except Exception as e:
-        print(f"⚠️ 數據更新失敗: {e}")
+        logger.error(f"⚠️ 數據更新失敗: {e}")
     
     # 2. 載入 ML 模型
-    print("\n>>> 載入 ML 模型...")
+    logger.info("\n>>> 載入 ML 模型...")
     model, feature_cols = load_ml_model()
     
     # 3. 載入數據
-    print("\n>>> 載入股票數據...")
+    logger.info("\n>>> 載入股票數據...")
     result = load_data()
     if result is None:
-        print("❌ 數據載入失敗")
+        logger.error("❌ 數據載入失敗")
         return
     df, latest_date = result
     
     # 4. 掃描並評分
-    print("\n>>> 掃描股票訊號...")
+    logger.info("\n>>> 掃描股票訊號...")
     signals, scan_date = scan_with_ml(df, model, feature_cols)
     
     # 5. 生成報告
-    print("\n>>> 生成 ML 報告...")
+    logger.info("\n>>> 生成 ML 報告...")
     generate_ml_report(signals, scan_date, df_full=df)
     
-    print("\n" + "="*60)
-    print("掃描完成！")
-    print("="*60)
+    logger.info("\n" + "="*60)
+    logger.info("掃描完成！")
+    logger.info("="*60)
 
 if __name__ == "__main__":
     main()

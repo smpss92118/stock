@@ -3,18 +3,22 @@ import sys
 import os
 from datetime import datetime
 import pandas as pd
-
 import shutil
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import config
-# from src.utils.email_sender import send_email # Disabled
+
+# Import shared logger
+from src.utils.logger import setup_logger
+
+# Setup Logger
+logger = setup_logger('main_scanner')
 
 def run_script(script_name):
     """Run a python script located in scripts/ directory"""
     script_path = os.path.join(config.SCRIPTS_DIR, script_name)
-    print(f"\n>>> Running {script_name}...")
+    logger.info(f"\n>>> Running {script_name}...")
     
     try:
         # Don't capture output to allow tqdm and real-time progress display
@@ -24,7 +28,7 @@ def run_script(script_name):
         )
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error running {script_name}")
+        logger.error(f"❌ Error running {script_name}")
         return False
 
 def generate_report_content():
@@ -191,40 +195,40 @@ def generate_report_content():
     return body
 
 def main():
-    print(f"=== Starting Daily Automation: {datetime.now()} ===")
+    logger.info(f"=== Starting Daily Automation: {datetime.now()} ===")
     
     # 1. Update Data
     if not run_script('update_daily_data.py'):
-        print("⚠️ Data update failed. Continuing...")
+        logger.warning("⚠️ Data update failed. Continuing...")
         
     # 2. Daily Scan
     if not run_script('run_daily_scan.py'):
-        print("❌ Daily scan failed. Aborting.")
+        logger.error("❌ Daily scan failed. Aborting.")
         return
         
     # 3. Historical Analysis (Update for backtest)
     if not run_script('run_historical_analysis.py'):
-        print("⚠️ Historical analysis failed. Backtest might be outdated.")
+        logger.warning("⚠️ Historical analysis failed. Backtest might be outdated.")
         
     # 4. Backtest
     if not run_script('run_backtest.py'):
-        print("⚠️ Backtest failed.")
+        logger.warning("⚠️ Backtest failed.")
         
     # 5. Save Reports Locally
-    print("\n>>> Saving Reports Locally...")
+    logger.info("\n>>> Saving Reports Locally...")
     today_str = datetime.now().strftime('%Y-%m-%d')
     output_dir = os.path.join(config.PROJECT_ROOT, 'daily_tracking_stock', today_str)
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-        print(f"Created directory: {output_dir}")
+        logger.info(f"Created directory: {output_dir}")
         
     # Generate Summary Report
     summary_content = generate_report_content()
     summary_path = os.path.join(output_dir, 'daily_summary.md')
     with open(summary_path, 'w', encoding='utf-8') as f:
         f.write(summary_content)
-    print(f"Saved summary report to: {summary_path}")
+    logger.info(f"Saved summary report to: {summary_path}")
     
     # Copy Files
     files_to_copy = [
@@ -237,11 +241,11 @@ def main():
         if os.path.exists(src):
             dst = os.path.join(output_dir, os.path.basename(src))
             shutil.copy2(src, dst)
-            print(f"Copied {os.path.basename(src)} to {output_dir}")
+            logger.info(f"Copied {os.path.basename(src)} to {output_dir}")
         else:
-            print(f"⚠️ Source file not found: {src}")
+            logger.warning(f"⚠️ Source file not found: {src}")
     
-    print("\n=== Automation Complete ===")
+    logger.info("\n=== Automation Complete ===")
 
 if __name__ == "__main__":
     main()

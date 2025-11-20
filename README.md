@@ -29,8 +29,9 @@ stock/
 │   ├── run_backtest.py        # 回測引擎
 │   └── backtest_engine_v2.py  # V2 回測引擎
 ├── src/                       # 核心邏輯
-│   ├── strategies/            # 型態識別 (HTF, CUP, VCP)
-│   ├── utils/                 # 工具函數
+│   ├── strategies/            # 策略邏輯 (HTF, CUP, VCP)
+│   ├── ml/                    # [NEW] ML 共享模組 (features.py)
+│   ├── utils/                 # [NEW] 通用工具 (logger.py, data_loader.py)
 │   └── crawlers/              # 數據爬蟲
 ├── ml_enhanced/               # ML 增強系統 (Production)
 │   ├── daily_ml_scanner.py    # ML 每日掃描 (Crontab Entry 2)

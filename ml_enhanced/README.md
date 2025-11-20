@@ -17,7 +17,7 @@ ml_enhanced/
 ├── daily_ml_scanner.py    # [核心] 每日 ML 掃描器 (Crontab 19:05)
 ├── weekly_retrain.py      # [核心] 每週模型再訓練 (Crontab Sun 02:00)
 ├── scripts/
-│   ├── prepare_ml_data.py # 特徵工程 (計算 ML 特徵)
+│   ├── prepare_ml_data.py # 特徵工程 (使用 src.ml.features)
 │   ├── train_models.py    # 模型訓練 (XGBoost)
 ├── models/
 │   ├── stock_selector.pkl # 股票選擇模型 (XGBoost Classifier)
@@ -31,6 +31,8 @@ ml_enhanced/
 ├── README.md              # 本文件
 └── CRONTAB_SETUP.md       # 自動化設定說明
 ```
+
+> **注意**: 本系統依賴 `stock/src/ml/` (特徵提取) 和 `stock/src/utils/` (日誌記錄) 共享模組。
 
 ---
 

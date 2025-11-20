@@ -22,122 +22,34 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 # Import original data loader
 from scripts.run_backtest import load_data_polars, generate_trade_candidates
 
+# Import shared modules
+from src.utils.logger import setup_logger
+from src.ml.features import calculate_technical_indicators, extract_ml_features
+
 # Configuration
 PATTERN_FILE = os.path.join(os.path.dirname(__file__), '../../data/processed/pattern_analysis_result.csv')
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), '../data/ml_features.csv')
 STOCK_INFO_FILE = os.path.join(os.path.dirname(__file__), '../../data/raw/2023_2025_daily_stock_info.csv')
 
-def calculate_technical_indicators(group):
-    """計算技術指標（簡化版）"""
-    # RSI
-    group['rsi_14'] = 50  # Simplified
-    
-    # MA Trend
-    if 'ma20' in group.columns and 'ma50' in group.columns:
-        group['ma_trend'] = (group['ma20'] > group['ma50']).astype(int)
-    else:
-        group['ma_trend'] = 1
-    
-    # Volatility
-    if len(group) >= 20:
-        group['volatility'] = group['close'].pct_change().rolling(20).std()
-    else:
-        group['volatility'] = 0.02
-    
-    # ATR Ratio (Simplified)
-    if len(group) >= 14:
-        high_low = group['high'] - group['low']
-        group['atr_ratio'] = high_low.rolling(14).mean() / group['close']
-    else:
-        group['atr_ratio'] = 0.02
-    
-    # Market Trend (Simplified: assume bullish)
-    group['market_trend'] = 1
-    
-    return group
-
-def extract_pattern_features(row, pattern_type):
-    """提取型態特徵"""
-    features = {}
-    
-    if pattern_type == 'htf':
-        features['pattern_type'] = 'HTF'
-        features['buy_price'] = row.get('htf_buy_price', 0)
-        features['stop_price'] = row.get('htf_stop_price', 0)
-        features['pattern_grade'] = row.get('htf_grade', 'C')
-        # Convert grade to numeric
-        grade_map = {'A': 3, 'B': 2, 'C': 1}
-        features['grade_numeric'] = grade_map.get(features['pattern_grade'], 1)
-    elif pattern_type == 'cup':
-        features['pattern_type'] = 'CUP'
-        features['buy_price'] = row.get('cup_buy_price', 0)
-        features['stop_price'] = row.get('cup_stop_price', 0)
-        features['pattern_grade'] = 'N/A'
-        features['grade_numeric'] = 2  # Default to B
-    elif pattern_type == 'vcp':
-        features['pattern_type'] = 'VCP'
-        features['buy_price'] = row.get('vcp_buy_price', 0)
-        features['stop_price'] = row.get('vcp_stop_price', 0)
-        features['pattern_grade'] = 'N/A'
-        features['grade_numeric'] = 2  # Default to B
-    
-    # Distance to buy price
-    current_price = row['close']
-    if features['buy_price'] > 0:
-        features['distance_to_buy_pct'] = (features['buy_price'] - current_price) / current_price * 100
-    else:
-        features['distance_to_buy_pct'] = 0
-    
-    # Risk percentage
-    if features['buy_price'] > 0 and features['stop_price'] > 0:
-        features['risk_pct'] = (features['buy_price'] - features['stop_price']) / features['buy_price'] * 100
-    else:
-        features['risk_pct'] = 0
-    
-    return features
+# Setup Logger
+logger = setup_logger('prepare_ml_data')
 
 def generate_labels(df, pattern_type):
     """
-    生成標籤：使用原始回測引擎計算實際報酬
+    生成標籤 (is_winner)
     
-    注意：generate_trade_candidates 返回的是「進場後的交易」
-    我們需要將其映射回「訊號日期」
+    Winner 定義:
+    1. 未來 20 天內最大漲幅 > 10%
+    2. 且在達到 10% 漲幅前，未觸及停損 (-5% 或 pattern stop)
     """
-    print(f"Generating labels for {pattern_type}...")
-    
-    # Use original backtest engine to get actual returns
-    strategy = f'is_{pattern_type}'
-    
-    # Best parameters from original backtest
-    params = {'trigger_r': 1.5, 'trail_ma': 'ma20'}
-    
-    # Generate trade candidates
-    candidates = generate_trade_candidates(df, strategy, 'trailing', params)
-    
-    print(f"  Generated {len(candidates)} trade candidates")
-    
-    # The problem: candidates don't have 'sid', we need to extract it from the backtest process
-    # Solution: We'll match based on the pattern analysis result directly
-    # For each signal, we simulate if it would have been traded and what the return would be
-    
-    # Instead, let's use a simpler approach:
-    # Load the pattern analysis result and match signals with their future returns
-    
-    # For now, use a simplified labeling: calculate forward returns from signal date
-    import polars as pl
-    
-    # Convert to pandas for easier manipulation
-    df_pd = df.to_pandas()
-    
-    # For each signal, calculate forward return (30 days)
     pattern_col = f'is_{pattern_type}'
     buy_col = f'{pattern_type}_buy_price'
     stop_col = f'{pattern_type}_stop_price'
     
-    signals = df_pd[
-        (df_pd[pattern_col] == True) &
-        (df_pd[buy_col].notna()) &
-        (df_pd[stop_col].notna())
+    signals = df[
+        (df[pattern_col] == True) &
+        (df[buy_col].notna()) &
+        (df[stop_col].notna())
     ].copy()
     
     trade_lookup = {}
@@ -149,9 +61,9 @@ def generate_labels(df, pattern_type):
         stop_price = signal[stop_col]
         
         # Get future prices for this stock
-        stock_data = df_pd[
-            (df_pd['sid'] == sid) &
-            (df_pd['date'] > signal_date)
+        stock_data = df[
+            (df['sid'] == sid) &
+            (df['date'] > signal_date)
         ].head(30)  # Next 30 days
         
         if len(stock_data) == 0:
@@ -162,65 +74,77 @@ def generate_labels(df, pattern_type):
         entry_candidates = stock_data[stock_data['high'] >= buy_price]
         
         if len(entry_candidates) == 0:
-            # Never triggered
-            trade_lookup[(sid, signal_date)] = 0.0
-            continue
-        
-        # Entry on first day that hit buy_price
-        entry_idx = entry_candidates.index[0]
-        entry_price = buy_price
-        
-        # Get subsequent prices after entry
-        future_data = df_pd[
-            (df_pd['sid'] == sid) &
-            (df_pd.index > entry_idx)
-        ].head(20)  # Hold for max 20 days
-        
-        if len(future_data) == 0:
-            trade_lookup[(sid, signal_date)] = 0.0
-            continue
-        
-        # Simplified exit logic: check if hit stop or target (1.5R)
-        risk = entry_price - stop_price
-        target = entry_price + risk * 1.5
-        
-        pnl = 0.0
-        for _, day in future_data.iterrows():
-            # Check stop
-            if day['low'] <= stop_price:
-                pnl = (stop_price - entry_price) / entry_price
-                break
-            # Check target
-            if day['high'] >= target:
-                pnl = (target - entry_price) / entry_price
-                break
+            # Never triggered entry
+            actual_return = 0.0
+            is_winner = 0
         else:
-            # Time exit
-            pnl = (future_data.iloc[-1]['close'] - entry_price) / entry_price
+            entry_date = entry_candidates.iloc[0]['date']
+            
+            # Look at price action AFTER entry
+            post_entry = stock_data[stock_data['date'] >= entry_date].copy()
+            
+            if len(post_entry) < 2:
+                actual_return = 0.0
+                is_winner = 0
+            else:
+                # Calculate max potential return in next 20 days
+                max_price = post_entry['high'].max()
+                min_price = post_entry['low'].min()
+                
+                max_return = (max_price - buy_price) / buy_price
+                max_drawdown = (min_price - buy_price) / buy_price
+                
+                # Winner definition: > 10% gain
+                # Loser definition: Hit stop loss (pattern stop)
+                
+                # Check if stop hit before target
+                stop_hit = False
+                target_hit = False
+                
+                for _, day in post_entry.iterrows():
+                    if day['low'] <= stop_price:
+                        stop_hit = True
+                        break
+                    if day['high'] >= buy_price * 1.10:
+                        target_hit = True
+                        break
+                
+                if target_hit and not stop_hit:
+                    is_winner = 1
+                    actual_return = 0.10 # Cap at target
+                elif stop_hit:
+                    is_winner = 0
+                    actual_return = (stop_price - buy_price) / buy_price
+                else:
+                    # Neither hit, take return at end of period
+                    final_price = post_entry.iloc[-1]['close']
+                    actual_return = (final_price - buy_price) / buy_price
+                    is_winner = 1 if actual_return > 0.10 else 0
         
-        trade_lookup[(sid, signal_date)] = pnl
-    
-    print(f"  Generated labels for {len(trade_lookup)} signals")
+        trade_lookup[(sid, signal_date)] = {
+            'actual_return': actual_return,
+            'is_winner': is_winner
+        }
+        
     return trade_lookup
 
 def main():
-    print("="*80)
-    print("ML Data Preparation")
-    print("="*80)
+    logger.info("="*80)
+    logger.info("ML Data Preparation")
+    logger.info("="*80)
     
     # Load data
-    print("\nLoading data...")
+    logger.info("Loading data...")
     df = load_data_polars()
     if df is None:
-        print("❌ Failed to load data")
+        logger.error("❌ Failed to load data")
         return
     
     # Convert to pandas for easier manipulation
-    import polars as pl
     df_pd = df.to_pandas()
     
     # Calculate technical indicators
-    print("Calculating technical indicators for all stocks...")
+    logger.info("Calculating technical indicators for all stocks...")
     # Use group_keys=False to avoid FutureWarning while keeping all columns
     df_pd = df_pd.groupby('sid', group_keys=False).apply(lambda x: calculate_technical_indicators(x)).reset_index(drop=True)
     
@@ -228,98 +152,82 @@ def main():
     all_features = []
     
     for pattern_type in ['htf', 'cup', 'vcp']:
-        print(f"\n{'='*80}")
-        print(f"Processing {pattern_type.upper()} patterns...")
-        print(f"{'='*80}")
+        logger.info(f"\n{'='*80}")
+        logger.info(f"Processing {pattern_type.upper()} patterns...")
+        logger.info(f"{'='*80}")
         
         # Filter signals
         pattern_col = f'is_{pattern_type}'
-        buy_col = f'{pattern_type}_buy_price'
-        
-        if pattern_col not in df_pd.columns or buy_col not in df_pd.columns:
-            print(f"⚠️ Skipping {pattern_type}: columns not found")
-            continue
-        
-        signals = df_pd[
-            (df_pd[pattern_col] == True) &
-            (df_pd[buy_col].notna())
-        ].copy()
-        
-        print(f"Found {len(signals)} {pattern_type.upper()} signals")
+        signals = df_pd[df_pd[pattern_col] == True].copy()
+        logger.info(f"Found {len(signals)} {pattern_type.upper()} signals")
         
         if len(signals) == 0:
             continue
+            
+        # Generate labels (Target)
+        logger.info(f"Generating labels for {pattern_type}...")
+        labels = generate_labels(df_pd, pattern_type)
+        logger.info(f"  Generated {len(labels)} trade candidates")
         
-        # Generate labels (actual returns from backtest)
-        # Pass pandas df for simplified calculation
-        trade_lookup = generate_labels(df, pattern_type)
-        
-        # Extract features for each signal
+        # Extract features
+        count = 0
         for idx, row in signals.iterrows():
-            # Pattern features
-            pattern_features = extract_pattern_features(row, pattern_type)
+            sid = row['sid']
+            date = row['date']
             
-            # Technical features
-            tech_features = {
-                'rsi_14': row.get('rsi_14', 50),
-                'ma_trend': row.get('ma_trend', 0),
-                'volatility': row.get('volatility', 0),
-                'atr_ratio': row.get('atr_ratio', 0)
-            }
+            # Get label
+            label_data = labels.get((sid, date))
             
-            # Market features (simplified for now)
-            market_features = {
-                'market_trend': 1,  # TODO: Calculate from TAIEX
-                'signal_count_ma10': 0,  # TODO: Calculate
-                'signal_count_ma60': 0   # TODO: Calculate
-            }
+            # Extract features using shared module
+            features = extract_ml_features(row, pattern_type)
             
-            # Combine all features
-            features = {
-                'sid': row['sid'],
-                'date': row['date'],
-                **pattern_features,
-                **tech_features,
-                **market_features
-            }
+            # Add metadata
+            features['sid'] = sid
+            features['date'] = date
             
-            # Get label (actual return)
-            key = (row['sid'], row['date'])
-            actual_return = trade_lookup.get(key, 0)
-            
-            features['actual_return'] = actual_return
-            features['is_winner'] = 1 if actual_return > 0.10 else 0  # 10% threshold
+            # Add label
+            if label_data:
+                features['actual_return'] = label_data['actual_return']
+                features['is_winner'] = label_data['is_winner']
+            else:
+                # If no label (e.g. recent data), mark as unknown or skip
+                # For training, we need labels. For recent data, we might keep it for prediction?
+                # Here we assume this script is for TRAINING data, so we skip if no label (future data)
+                features['actual_return'] = 0
+                features['is_winner'] = 0
             
             all_features.append(features)
-    
+            count += 1
+            
+        logger.info(f"  Generated labels for {count} signals")
+
     # Create DataFrame
     if not all_features:
-        print("\n❌ No features generated")
+        logger.warning("No features generated!")
         return
+
+    feature_df = pd.DataFrame(all_features)
     
-    df_features = pd.DataFrame(all_features)
+    # Save to CSV
+    logger.info(f"\n{'='*80}")
+    logger.info("Feature Generation Complete")
+    logger.info(f"{'='*80}")
+    logger.info(f"Total samples: {len(feature_df)}")
+    logger.info(f"Winners (>10% return): {feature_df['is_winner'].sum()} ({feature_df['is_winner'].mean()*100:.1f}%)")
+    logger.info(f"Average return: {feature_df['actual_return'].mean()*100:.2f}%")
+    logger.info(f"Median return: {feature_df['actual_return'].median()*100:.2f}%")
+    logger.info(f"Max return: {feature_df['actual_return'].max()*100:.2f}%")
+    logger.info(f"Min return: {feature_df['actual_return'].min()*100:.2f}%")
     
-    # Remove rows with missing values
-    df_features = df_features.dropna()
-    
-    print(f"\n{'='*80}")
-    print(f"Feature Generation Complete")
-    print(f"{'='*80}")
-    print(f"Total samples: {len(df_features)}")
-    print(f"Winners (>10% return): {df_features['is_winner'].sum()} ({df_features['is_winner'].mean()*100:.1f}%)")
-    print(f"Average return: {df_features['actual_return'].mean()*100:.2f}%")
-    print(f"Median return: {df_features['actual_return'].median()*100:.2f}%")
-    print(f"Max return: {df_features['actual_return'].max()*100:.2f}%")
-    print(f"Min return: {df_features['actual_return'].min()*100:.2f}%")
-    
-    # Save
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    df_features.to_csv(OUTPUT_FILE, index=False)
-    print(f"\n✅ Features saved to {OUTPUT_FILE}")
+    feature_df.to_csv(OUTPUT_FILE, index=False)
+    logger.info(f"\n✅ Features saved to {OUTPUT_FILE}")
     
     # Show sample
-    print(f"\nSample features:")
-    print(df_features[['sid', 'date', 'pattern_type', 'grade_numeric', 'distance_to_buy_pct', 'actual_return', 'is_winner']].head(20))
+    print("\nSample features:")
+    print(feature_df.head(20)[['sid', 'date', 'pattern_type', 'grade_numeric', 'distance_to_buy_pct', 'actual_return', 'is_winner']])
+    
+    logger.info("✅ Feature preparation complete")
 
 if __name__ == "__main__":
     main()
