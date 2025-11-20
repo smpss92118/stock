@@ -3,8 +3,8 @@ import pandas as pd
 
 def detect_htf(window,
                rs_rating=0.0, # Optimized: 0
-               min_up_ratio=0.6, # Optimized: 0.6
-               max_pullback=0.15, # Optimized: 0.15 (was 0.25)
+               min_up_ratio=1.0, # Optimized: 0.6 (was 0.8)
+               max_pullback=0.2, # Optimized: 0.15 (was 0.25)
                min_flag_days=3,
                max_flag_days=12):
 
