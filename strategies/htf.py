@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 def detect_htf(window,
+               rs_rating=0.0, # New in Cycle 5
                min_up_ratio=0.8,
                max_pullback=0.25,
                min_flag_days=3,
@@ -14,6 +15,10 @@ def detect_htf(window,
 
     n = len(window)
     if n < 20:
+        return False, np.nan, np.nan
+
+    # 0. RS Filter (Cycle 5)
+    if rs_rating < 0:
         return False, np.nan, np.nan
 
     start_price = close[0]

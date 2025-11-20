@@ -111,4 +111,21 @@
     - VCP 策略已達到一個穩定的高性能水平。
     - 下一步 (Cycle 5) 將轉向優化 **HTF (High Tight Flag)** 策略，目前 HTF 仍是冠軍 (288%)，嘗試將 RS 過濾應用於 HTF，看能否突破 300%。
 
+## Cycle 5: HTF Optimization with RS (HTF + RS)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: HTF
+    - **New Filter**: `RS Rating > 0`
+- **Results (Limited Capital)**:
+    - **HTF (Trig=1.5R, Trail=MA20)**:
+        - Return: **288.3%** (Identical to Baseline)
+        - Count: 275 (Identical to Baseline)
+- **Analysis**:
+    - 加入 RS 過濾對 HTF 策略 **完全沒有影響**。
+    - **原因**：HTF 的定義本身就要求股價在短期內上漲 80% 以上。這本身就是極強的相對強度表現。在這種情況下，RS > 0 是一個多餘的條件，因為所有符合 HTF 的股票必然大幅跑贏大盤。
+- **Conclusion**:
+    - HTF 策略本身已隱含了極高的 RS 篩選。
+    - 無需對 HTF 進行額外的 RS 過濾。
+    - 下一步 (Cycle 6) 將轉向優化 **CUP (Cup with Handle)** 策略。CUP 的形成時間較長，相對強度可能不如 HTF 極端，因此 RS 過濾可能會有幫助。
+
 ---
