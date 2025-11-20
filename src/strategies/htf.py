@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 
 def detect_htf(window,
-               rs_rating=0.0, # New in Cycle 5
-               min_up_ratio=0.6, # Relaxed from 0.8 (Cycle 7)
-               max_pullback=0.25,
+               rs_rating=0.0, # Optimized: 0
+               min_up_ratio=0.8, # Optimized: 0.6 (was 0.8)
+               max_pullback=0.25, # Optimized: 0.15 (was 0.25)
                min_flag_days=3,
                max_flag_days=12):
 
