@@ -90,4 +90,25 @@
     - 建議嘗試較靈敏的市場濾網 (如 Market > MA50) 或改用個股相對強度 (RS) 過濾。
     - 下一步 (Cycle 4) 將嘗試移除市場濾網，改為加入 **RS (Relative Strength)** 過濾，確保個股強於大盤。
 
+## Cycle 4: Relative Strength (RS) Filter (相對強度過濾)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: VCP
+    - **New Filter**: `RS Rating > 0` (Stock 6-month Return > Market 6-month Return)
+    - **Removed Filter**: 移除 Cycle 3 的 `Market Price > MA200`
+- **Results (Limited Capital)**:
+    - **VCP (Trig=2.0R, Trail=MA20)**:
+        - Return: **155.7%** (Best VCP Result so far! Cycle 2 was 150.2%)
+        - Sharpe: **0.65** (Similar to Cycle 2)
+        - Win Rate: **26.2%** (Improved from 25.5%)
+        - Max DD: **-13.4%** (Same as Cycle 2)
+        - Count: 340
+- **Analysis**:
+    - RS 過濾成功超越了單純的個股趨勢過濾 (Cycle 2) 和大盤趨勢過濾 (Cycle 3)。
+    - **RS 的優勢**：它動態地篩選出比大盤強勢的股票，即使大盤處於震盪或弱勢，只要個股表現相對較好（例如抗跌或率先反彈），仍有機會進場。這解決了 MA200 過於滯後的問題，同時保持了過濾弱勢股的能力。
+    - **VCP 優化總結**：從最初的 -6.8% (Cycle 0) -> 155.7% (Cycle 4)，進步巨大。
+- **Conclusion**:
+    - VCP 策略已達到一個穩定的高性能水平。
+    - 下一步 (Cycle 5) 將轉向優化 **HTF (High Tight Flag)** 策略，目前 HTF 仍是冠軍 (288%)，嘗試將 RS 過濾應用於 HTF，看能否突破 300%。
+
 ---

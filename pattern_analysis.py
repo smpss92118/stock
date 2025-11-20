@@ -85,21 +85,48 @@ def main():
             else: dd = 1.0 - row_today['close'] / window_high
             change_pct = (row_today['close'] / prev_close - 1.0) if (i > 0 and prev_close != 0) else np.nan
             
-            # Market Trend Info
+            # Market Trend & RS Info
             market_trend = None
+            rs_rating = 0.0 # Default
+            
             if market_df is not None:
                 date_str = row_today['date']
                 if date_str in market_df.index:
                     m_row = market_df.loc[date_str]
-                    # Define trend: Close > MA200?
+                    
+                    # 1. Market Trend
                     market_trend = {
                         'close': m_row['close'],
                         'ma200': m_row['market_ma200'],
                         'is_uptrend': m_row['close'] > m_row['market_ma200']
                     }
+                    
+                    # 2. Relative Strength (RS)
+                    # Compare 6-month return (Window Return) vs Market 6-month return
+                    # Window start index is i - WINDOW_DAYS + 1
+                    # Market data needs to be aligned.
+                    # Let's approximate: Stock Change % vs Market Change % over same period
+                    
+                    # Stock Return (already calc as 'up' in detect functions, but let's do it here)
+                    stock_start_price = window.iloc[0]['close']
+                    stock_return = (row_today['close'] - stock_start_price) / stock_start_price if stock_start_price > 0 else 0
+                    
+                    # Market Return
+                    # Find market price at window start
+                    start_date_str = window.iloc[0]['date']
+                    if start_date_str in market_df.index:
+                        market_start_price = market_df.loc[start_date_str]['close']
+                        market_return = (m_row['close'] - market_start_price) / market_start_price
+                        
+                        # RS: Simple difference or Ratio? 
+                        # Let's use difference: Stock Return - Market Return
+                        rs_rating = stock_return - market_return
+                    else:
+                        rs_rating = 0.0 # No data
             
             # Detect Patterns
-            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], market_trend) 
+            # Pass rs_rating to VCP
+            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], rs_rating=rs_rating) 
             is_htf, htf_buy, htf_stop = detect_htf(window) # Can add market_trend later
             is_cup, cup_buy, cup_stop = detect_cup(window, ma_info) # Can add market_trend later
             
