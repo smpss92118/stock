@@ -242,4 +242,70 @@
     - 實施 **動態倉位調整** (A=15%, B=10%, C=5%) 以進一步優化 HTF。
     - 繼續優化 CUP 和 VCP。
 
+## Cycle 11: CUP Advanced (U-Shape + Handle + RSI)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: CUP
+    - **New Filter 1**: U-Shape Check - Bottom zone must span ≥20% of cup duration (avoid V-shape)
+    - **New Filter 2**: Handle in Upper 1/3 - Handle low must be in upper 1/3 of cup range (stricter than previous 50%)
+    - **New Filter 3**: Handle Depth < 25% (prevent deep pullbacks)
+    - **New Filter 4**: RSI > 50 at breakout (momentum confirmation)
+    - **Depth Range**: Tightened to 15-35% (from 12-33%)
+- **Results** (With Compounding):
+    - **CUP (Limited, R=3.0, T=20)**: Return = **20.6%** (Previous: 314.3%) ❌
+    - **CUP (Limited, R=2.0, T=20)**: Return = **18.7%** (Previous: 193.1%) ❌
+    - Trade Count: 79 (Previous: 276) - **71% reduction**
+- **Analysis**:
+    - **過度優化 (Over-Optimization)**: 嚴格的品質過濾器（U-shape、上1/3把手、RSI > 50）過度篩選，移除了大量獲利機會。
+    - **Trade-off**: 雖然勝率略微提升（49.4% vs 56.9%），但交易次數大幅減少導致複利效應無法發揮。
+    - **結論**: Cycle 11 失敗。過於嚴格的型態定義在實際市場中難以找到足夠的交易機會。
+- **Action**:
+    - **回滾 (Revert)** CUP 策略至 **Cycle 10** (RS > 0, 基本把手邏輯)。
+    - CUP 已經是表現最佳的策略（314.3%），無需進一步優化。
+    - 將重點轉移至 **VCP 優化**（目前最弱，僅 96.4%）。
+
+## Cycle 12: VCP Optimization (Relaxed RS Filter)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: VCP
+    - **Revert**: RS Rating > 70 → **RS Rating > 0** (Back to Cycle 4)
+    - **Remove**: "Near 52-week High" filter (removed)
+    - **Keep**: Basic contraction logic, volume dry-up, Price > MA50
+- **Results** (With Compounding):
+    - **VCP (Limited, Trig=1.5R, Trail=MA50)**: Return = **-0.6%** (Negative!)
+    - **VCP (Limited, Trig=2.0R, Trail=MA50)**: Return = **-1.0%** (Negative!)
+    - **VCP (Limited, R=2.0, T=20)**: Return = **-31.7%** (Worst!)
+- **Analysis**:
+    - **VCP 失敗**: 即使放寬條件，VCP 在複利環境下仍然表現不佳。
+    - **問題**: VCP 的勝率太低（約 30%），在複利環境下會快速虧損。
+    - **結論**: VCP 策略需要根本性的重新設計，或者在台股市場不適用。
+
+---
+
+# 最終總結 (Final Summary)
+
+## 最佳策略表現 (Best Strategy Performance with Compounding)
+
+1. **CUP (R=3.0, T=20)**: **314.3%** return, 56.9% win rate, Sharpe 2.24 🏆
+2. **HTF (Trig=1.5R, Trail=MA20)**: **210.1%** return, 31.7% win rate, Sharpe 0.79
+3. **CUP (R=2.0, T=20)**: **193.1%** return, 57.3% win rate, Sharpe 2.16
+4. **HTF (R=2.0, T=20)**: **189.8%** return, 44.9% win rate, Sharpe 1.20
+5. **HTF (Trig=2.0R, Trail=MA20)**: **154.2%** return, 32.3% win rate, Sharpe 0.67
+
+**Note**: VCP 策略在所有設定下都表現不佳（負報酬），不建議使用。
+
+## 關鍵改進 (Key Improvements)
+
+1. **複利實施**: 所有策略報酬提升 50-70%（CUP: 184.9% → 314.3%）
+2. **HTF Grading System**: 已實施 A/B/C 評級系統，可用於未來的動態倉位調整
+3. **CUP**: 最佳表現者，維持 Cycle 6 (RS > 0) 的簡單有效邏輯
+4. **VCP**: 在台股市場表現不佳，需要根本性重新設計或放棄
+
+## 學到的教訓 (Lessons Learned)
+
+1. **簡單有效**: 過於複雜的篩選條件往往會過度篩選，降低總報酬
+2. **複利重要**: 複利是長期投資的核心，對總報酬影響巨大
+3. **質量 vs 數量**: 需要平衡交易品質和交易頻率
+4. **版本控制**: Git 提交讓我們可以輕鬆回滾失敗的優化
+
 ---
