@@ -44,59 +44,62 @@ def detect_vcp(window,
     up = window_high / start_price - 1.0
     if up < min_up_ratio:
         return False, np.nan, np.nan
+        
+    # 1. ZigZag for Pivots
+    pivots = get_zigzag_pivots(high, low, close, zigzag_threshold)
+    if len(pivots) < 4: # Need at least 2 legs (High-Low-High-Low) -> 4 points
+        return False, np.nan, np.nan
 
-    base_high = high[window_high_idx:]
-    base_low = low[window_high_idx:]
-    base_close = close[window_high_idx:]
-    
-    if len(base_close) < 10: return False, np.nan, np.nan
-    
-    pivots = get_zigzag_pivots(base_high, base_low, base_close, threshold_pct=zigzag_threshold)
-    
-    troughs = [p for p in pivots if p['type'] == 'trough']
-    peaks = [p for p in pivots if p['type'] == 'peak']
-    
-    if len(troughs) < 2:
+    # 2. Analyze Contractions (High -> Low)
+    # Pivots: [{'index':, 'price':, 'type':}]
+    # We need pairs of High -> Low
+    contractions = []
+    for i in range(len(pivots)-1):
+        if pivots[i]['type'] == 'peak' and pivots[i+1]['type'] == 'trough':
+            high_p = pivots[i]['price']
+            low_p = pivots[i+1]['price']
+            depth = 1.0 - low_p / high_p
+            contractions.append(depth)
+            
+    if len(contractions) < 2: # Need at least 2 contractions for VCP
         return False, np.nan, np.nan
         
-    valid_vcp = True
-    
-    # Check Lows (Increasing)
-    for i in range(len(troughs) - 1):
-        if troughs[i+1]['price'] < troughs[i]['price'] * 0.98:
-             valid_vcp = False
-             break
-    if not valid_vcp: return False, np.nan, np.nan
-    
-    # Check Depth Contraction
-    legs = []
-    current_peak = pivots[0]['price']
-    for p in pivots:
-        if p['type'] == 'peak':
-            current_peak = p['price']
-        elif p['type'] == 'trough':
-            if current_peak == 0: continue
-            depth = (current_peak - p['price']) / current_peak
-            legs.append(depth)
-            
-    for i in range(len(legs) - 1):
-        if legs[i+1] >= legs[i]:
-            valid_vcp = False
-            break
-    if not valid_vcp: return False, np.nan, np.nan
-    
-    # Volume Filter
-    last_3_days_vol = vol[-3:].mean()
-    if not np.isnan(vol_ma50_val) and vol_ma50_val > 0:
-        if last_3_days_vol > vol_ma50_val * vol_dry_up_ratio:
-            return False, np.nan, np.nan
-            
-    if len(peaks) > 0:
-        buy_price = peaks[-1]['price']
-    else:
-        buy_price = window_high
-        
-    stop_price = troughs[-1]['price']
-    if stop_price >= buy_price: return False, np.nan, np.nan
+    # 2.1 Check Decreasing Volatility (Basic Damping)
+    # Depths should generally decrease.
+    if contractions[-1] > contractions[0]: # Simple check: Last shouldn't be larger than First
+        return False, np.nan, np.nan
 
-    return True, float(buy_price), float(stop_price)
+    # 4. Dry Up Check (Existing)
+    # Last few days volume < 50% of MA50
+    # We already have vol_dry_up_ratio=0.5
+    recent_vol_mean = vol[-5:].mean()
+    if recent_vol_mean > vol_ma50_val * vol_dry_up_ratio:
+        return False, np.nan, np.nan
+
+    # Buy Point: Last Pivot High
+    # Find the last High pivot
+    last_high_idx = -1
+    last_high_price = -1
+    for p in reversed(pivots):
+        if p['type'] == 'peak':
+            last_high_idx = p['index']
+            last_high_price = p['price']
+            break
+            
+    if last_high_price == -1: return False, np.nan, np.nan
+    
+    # Stop Loss: Last Pivot Low
+    last_low_price = -1
+    for p in reversed(pivots):
+        if p['type'] == 'trough':
+            last_low_price = p['price']
+            break
+            
+    if last_low_price == -1: return False, np.nan, np.nan
+    
+    # Check if Price is near Buy Point (Breakout imminent)
+    # Close should be close to Last High
+    if close[-1] < last_high_price * 0.95: # Too far from pivot
+        return False, np.nan, np.nan
+
+    return True, float(last_high_price), float(last_low_price)

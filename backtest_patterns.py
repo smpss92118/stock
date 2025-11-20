@@ -232,17 +232,12 @@ def run_capital_simulation(candidates, mode='limited'):
             
     elif mode == 'limited':
         current_cash = INITIAL_CAPITAL
-        position_size = INITIAL_CAPITAL * POSITION_SIZE_PCT
-        active_positions = [] # list of {'exit_date': date, 'return_cash': float}
+        active_positions = [] # list of {'exit_date': date, 'cost': float, 'current_value': float}
         
         for t in candidates:
             today = t['entry_date']
             
             # 1. Release funds from expired positions
-            # Logic: If a position exits ON or BEFORE today, funds are back.
-            # (Conservative: funds back next day? Let's assume T+0 for simplicity or T+1 logic)
-            # Here we use: if exit_date <= today, money is back available for today's trade
-            
             still_active = []
             for p in active_positions:
                 if p['exit_date'] <= today:
@@ -251,7 +246,15 @@ def run_capital_simulation(candidates, mode='limited'):
                     still_active.append(p)
             active_positions = still_active
             
-            # 2. Try to Enter
+            # 2. Calculate Current Total Equity (Compounding!)
+            # Total Equity = Cash + Sum of all active position costs
+            # (We use cost as proxy for current value since we don't track intraday)
+            total_equity = current_cash + sum(p['cost'] for p in active_positions)
+            
+            # 3. Calculate Position Size based on Current Equity (10% of total)
+            position_size = total_equity * POSITION_SIZE_PCT
+            
+            # 4. Try to Enter
             if len(active_positions) < MAX_POSITIONS and current_cash >= position_size:
                 current_cash -= position_size
                 
@@ -260,7 +263,8 @@ def run_capital_simulation(candidates, mode='limited'):
                 
                 active_positions.append({
                     'exit_date': t['exit_date'],
-                    'return_cash': return_cash
+                    'return_cash': return_cash,
+                    'cost': position_size  # Track cost for equity calculation
                 })
                 
                 t_record = t.copy()

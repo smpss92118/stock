@@ -188,4 +188,58 @@
 - **Next Step**:
     - 進入 **Cycle 9**，實施更細緻的「收縮比率」和「成交量」規則。這可能會進一步過濾訊號，我們需要觀察是否能通過提高勝率來彌補頻率的下降。
 
+## Cycle 9: VCP Advanced Part 2 (Contraction & Volume)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: VCP
+    - **Parameter**: `zigzag_threshold`: 0.05 -> 0.03 (To detect tight contractions)
+    - **New Filter 1**: `Contraction Sequence`: Decreasing depths, Last < 5%, First 10-35%.
+    - **New Filter 2**: `Volume`: Down 30% in second half.
+- **Results**:
+    - **Limited Capital**:
+        - Return: **9.7%** (Collapsed from 95.8%)
+        - Sharpe: **0.17**
+        - Count: 61
+- **Analysis**:
+    - **過度優化 (Over-fitting)**：極度嚴格的型態定義（完美收縮 + 特定成交量型態）在現實市場中極極罕見。
+    - **ZigZag 雜訊**：為了檢測 < 5% 的收縮而將 ZigZag 降至 3%，引入了大量雜訊，導致許多非 VCP 型態被錯誤識別或正確型態被切碎。
+    - **結論**：Cycle 9 失敗。過於教科書式的定義不適合自動化交易。
+- **Action**:
+    - **回滾 (Revert)** VCP 策略至 **Cycle 8** (RS > 70, Near High < 15%)，保留其高 Sharpe (1.0) 的特性。
+    - 雖然 Cycle 4 (RS > 0) 總報酬最高，但 Cycle 8 代表了「高質量」的方向，符合進階優化的精神。
+
+## 重大改進: 複利邏輯實施
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Backtest Engine**: 修改 `backtest_patterns.py` 的資金管理邏輯
+    - **Before**: 固定倉位 = 100萬 × 10% = 10萬 (永遠不變)
+    - **After**: 動態倉位 = (當前現金 + 所有持倉成本) × 10% (複利)
+- **Impact**:
+    - **CUP (R=3.0, T=20)**: 184.9% → **314.3%** (+70% 提升)
+    - **HTF (R=2.0, T=20)**: 新增策略，達到 **189.8%**
+    - 所有策略的總報酬都因複利效應而顯著提升
+- **Conclusion**:
+    - 複利是長期投資的核心。這個修正讓回測結果更貼近真實交易情況。
+    - 後續所有結果都將基於複利邏輯。
+
+## Cycle 10: HTF Advanced (Grading System)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: HTF
+    - **New Feature**: A/B/C Grading System
+        - **A Grade**: Pole > 90%, Pullback < 15%, Vol Drop > 50%
+        - **B Grade**: Pole > 90%, Pullback 15-20%
+        - **C Grade**: Default (Pullback 20-25%)
+    - **Implementation**: `strategies/htf.py` now returns `htf_grade`
+    - **Note**: Position sizing based on grade is NOT yet implemented in backtest
+- **Results** (With Compounding):
+    - **HTF (Limited, R=2.0, T=20)**: Return = **189.8%**, Sharpe = 1.20
+    - **HTF (Limited, Trig=1.5R, Trail=MA20)**: Return = **210.1%**, Sharpe = 0.79
+- **Analysis**:
+    - HTF 表現優異，特別是在複利環境下。
+    - Grading 資訊已經儲存在 CSV 中，但尚未用於動態倉位調整。
+- **Next Step**:
+    - 實施 **動態倉位調整** (A=15%, B=10%, C=5%) 以進一步優化 HTF。
+    - 繼續優化 CUP 和 VCP。
+
 ---

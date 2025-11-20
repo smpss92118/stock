@@ -135,7 +135,7 @@ def main():
             # Pass rs_rating and high_52w to VCP
             high_52w = row_today['high_52w']
             is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], rs_rating=rs_rating, high_52w=high_52w) 
-            is_htf, htf_buy, htf_stop = detect_htf(window, rs_rating=rs_rating) 
+            is_htf, htf_buy, htf_stop, htf_grade = detect_htf(window, rs_rating=rs_rating) 
             is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
             
             # ... (Outcome Eval) ...
@@ -160,7 +160,7 @@ def main():
                 'change_pct': change_pct,
                 'is_vcp': is_vcp, 'vcp_buy_price': vcp_buy, 'vcp_stop_price': vcp_stop,
                 'vcp_2R': vcp_2R, 'vcp_3R': vcp_3R, 'vcp_4R': vcp_4R, 'vcp_stop': vcp_stop_hit,
-                'is_htf': is_htf, 'htf_buy_price': htf_buy, 'htf_stop_price': htf_stop,
+                'is_htf': is_htf, 'htf_buy_price': htf_buy, 'htf_stop_price': htf_stop, 'htf_grade': htf_grade,
                 'htf_2R': htf_2R, 'htf_3R': htf_3R, 'htf_4R': htf_4R, 'htf_stop': htf_stop_hit,
                 'is_cup': is_cup, 'cup_buy_price': cup_buy, 'cup_stop_price': cup_stop,
                 'cup_2R': cup_2R, 'cup_3R': cup_3R, 'cup_4R': cup_4R, 'cup_stop': cup_stop_hit,
