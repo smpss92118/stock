@@ -1,5 +1,5 @@
 # Backtest Report V2
-Generated: 2025-11-20 20:05:10.984517
+Generated: 2025-11-20 20:19:46.030022
 
 | Strategy           | Settings              |   Ann. Return % |   Return % |   Sharpe |   Trades |   Win Rate |
 |:-------------------|:----------------------|----------------:|-----------:|---------:|---------:|-----------:|
@@ -19,22 +19,22 @@ Generated: 2025-11-20 20:05:10.984517
 | is_cup (Unlimited) | Trig=2.0R, Trail=ma20 |           383.4 |     2377.1 |     1.94 |     4499 |       42.4 |
 | is_cup (Unlimited) | Trig=2.0R, Trail=ma50 |           423.9 |     2817.8 |    -0.35 |     4499 |       40.4 |
 | is_cup (Unlimited) | Trig=1.5R, Trail=ma50 |           435.2 |     2947.6 |    -0.42 |     4499 |       42.2 |
-| is_htf (Limited)   | R=2.0, T=60           |            32.7 |       93.9 |     0.85 |      358 |       44.4 |
-| is_htf (Limited)   | R=2.0, T=20           |            35.1 |      102.2 |     0.8  |      491 |       41.3 |
-| is_htf (Limited)   | Trig=2.0R, Trail=ma50 |            52.7 |      169.1 |     0.62 |      208 |       20.2 |
-| is_htf (Limited)   | Trig=2.0R, Trail=ma20 |            39.4 |      117.5 |     0.56 |      276 |       27.2 |
-| is_htf (Limited)   | Trig=1.5R, Trail=ma20 |            31.3 |       89   |     0.51 |      295 |       27.1 |
-| is_htf (Limited)   | R=3.0, T=60           |             8.3 |       20.6 |     0.26 |      280 |       32.1 |
-| is_htf (Limited)   | Trig=1.5R, Trail=ma50 |             3.3 |        7.8 |     0.2  |      242 |       15.7 |
-| is_htf (Limited)   | R=3.0, T=20           |            -1.2 |       -2.8 |    -0    |      431 |       34.6 |
-| is_htf (Unlimited) | R=2.0, T=60           |           105.5 |      438.5 |     1.46 |     1813 |       42.2 |
-| is_htf (Unlimited) | R=2.0, T=20           |            89.6 |      346.3 |     1.33 |     1813 |       42.6 |
-| is_htf (Unlimited) | R=3.0, T=20           |            84.8 |      320.5 |     1.02 |     1813 |       38.8 |
-| is_htf (Unlimited) | R=3.0, T=60           |            97.2 |      389.5 |     0.97 |     1813 |       33.5 |
-| is_htf (Unlimited) | Trig=1.5R, Trail=ma20 |           173.8 |      953.4 |     0.64 |     1813 |       39.3 |
-| is_htf (Unlimited) | Trig=2.0R, Trail=ma20 |           182.1 |     1030.4 |     0.58 |     1813 |       38   |
-| is_htf (Unlimited) | Trig=2.0R, Trail=ma50 |           159.7 |      831   |     0.52 |     1813 |       30.3 |
-| is_htf (Unlimited) | Trig=1.5R, Trail=ma50 |           150.5 |      755.9 |    -0.14 |     1813 |       28.8 |
+| is_htf (Limited)   | R=2.0, T=20           |            74.7 |      268.7 |     1.4  |      529 |       47.1 |
+| is_htf (Limited)   | Trig=1.5R, Trail=ma20 |           153.4 |      779.5 |     1.19 |      256 |       39.5 |
+| is_htf (Limited)   | R=3.0, T=20           |            59.2 |      196.5 |     1.13 |      451 |       44.6 |
+| is_htf (Limited)   | Trig=2.0R, Trail=ma20 |            61.4 |      206.5 |     0.81 |      238 |       29.8 |
+| is_htf (Limited)   | Trig=1.5R, Trail=ma50 |            43.4 |      132.3 |     0.64 |      237 |       25.3 |
+| is_htf (Limited)   | R=2.0, T=60           |            22.8 |       61.8 |     0.63 |      362 |       43.1 |
+| is_htf (Limited)   | R=3.0, T=60           |            23.5 |       63.7 |     0.6  |      300 |       35.3 |
+| is_htf (Limited)   | Trig=2.0R, Trail=ma50 |            23.4 |       63.5 |     0.44 |      202 |       22.8 |
+| is_htf (Unlimited) | R=2.0, T=60           |           121.1 |      539.6 |     1.37 |     2788 |       42   |
+| is_htf (Unlimited) | R=2.0, T=20           |           104.8 |      434.7 |     1.32 |     2788 |       42.5 |
+| is_htf (Unlimited) | R=3.0, T=20           |           108   |      454   |     1.11 |     2788 |       39.4 |
+| is_htf (Unlimited) | R=3.0, T=60           |           122.1 |      545.8 |     0.9  |     2788 |       35   |
+| is_htf (Unlimited) | Trig=1.5R, Trail=ma50 |           169.6 |      916.2 |     0.21 |     2788 |       28.7 |
+| is_htf (Unlimited) | Trig=1.5R, Trail=ma20 |           192   |     1124.5 |    -0.48 |     2788 |       38.5 |
+| is_htf (Unlimited) | Trig=2.0R, Trail=ma50 |           179.3 |     1004   |    -0.48 |     2788 |       29.4 |
+| is_htf (Unlimited) | Trig=2.0R, Trail=ma20 |           193.9 |     1143.4 |    -0.61 |     2788 |       36.8 |
 | is_vcp (Limited)   | Trig=1.5R, Trail=ma50 |            39.9 |      119.2 |     0.51 |      195 |       29.2 |
 | is_vcp (Limited)   | Trig=2.0R, Trail=ma50 |            38.1 |      112.8 |     0.46 |      185 |       29.2 |
 | is_vcp (Limited)   | Trig=2.0R, Trail=ma20 |            13.8 |       35.3 |     0.38 |      224 |       32.1 |
