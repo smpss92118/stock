@@ -103,10 +103,32 @@ python stock/main.py
 - `stock/main.py`: 總控程式。
 - `stock/scripts/`: 各個功能模組的執行腳本。
 - `stock/src/strategies/`: 策略核心邏輯 (CUP, HTF, VCP)。
+- `stock/optimization/`: 超參數優化系統 (含回測引擎與結果)。
 - `stock/src/crawlers/`: 爬蟲模組。
 - `stock/data/`: 數據存放區。
 - `stock/daily_tracking_stock/`: 每日產出的報告存檔。
 - `stock/archive/`: 舊的或不再使用的程式碼。
+
+## 🎯 超參數優化 (Hyperparameter Optimization)
+
+本系統包含一個獨立的超參數優化模組 (`stock/optimization/`)，使用網格搜索 (Grid Search) 與並行運算來尋找最佳策略參數。
+
+### 最新優化結果 (2025-11-20)
+
+經過「有限資本 (Limited Capital)」回測驗證，目前生產環境已更新為以下最佳參數：
+
+1.  **HTF 策略 (年化報酬 70.6%)**:
+    *   `min_up_ratio`: **0.6** (原 0.8) - 放寬漲幅要求，捕捉更多機會。
+    *   `max_pullback`: **0.15** (原 0.25) - 收緊回調限制，提高型態質量。
+
+2.  **VCP 策略 (勝率翻倍至 40%)**:
+    *   `zigzag_threshold`: **0.07** (原 0.05) - 過濾微小波動。
+    *   `vol_dry_up_ratio`: **0.45** (原 0.50) - 要求更嚴格的量縮。
+
+3.  **CUP 策略 (年化報酬 93.1%)**:
+    *   維持原參數 (R=3.0, T=20)，表現依舊強勁。
+
+詳細優化報告請見 `stock/optimization/results/`。
 
 ---
 **注意**: 本系統僅供輔助分析使用，不構成任何投資建議。股市投資有風險，請審慎評估。

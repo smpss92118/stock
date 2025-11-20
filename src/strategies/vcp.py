@@ -7,9 +7,9 @@ def detect_vcp(window,
                price_ma50_val, # Scalar
                rs_rating=0.0, # RS Rating (Percentile 0-100)
                high_52w=np.nan, # 52-week High
-               zigzag_threshold=0.05, 
-               min_up_ratio=0.5, 
-               vol_dry_up_ratio=0.5):
+               zigzag_threshold=0.07, # Optimized: 0.07 (was 0.05)
+               min_up_ratio=0.5, # Optimized: 0.5
+               vol_dry_up_ratio=0.45): # Optimized: 0.45 (was 0.5)
 
     high = window['high'].values
     low = window['low'].values
