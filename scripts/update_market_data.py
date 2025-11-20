@@ -1,9 +1,11 @@
+import sys
+import os
 import yfinance as yf
 import pandas as pd
-import os
 from datetime import datetime, timedelta
 
-OUTPUT_FILE = './market_data.csv'
+# 設定檔案路徑
+MARKET_DATA_FILE = os.path.join(os.path.dirname(__file__), '../data/raw/market_data.csv')
 TICKER = '^TWII' # Taiwan Weighted Index
 
 def download_market_data():

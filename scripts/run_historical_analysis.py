@@ -1,16 +1,21 @@
+import sys
+import os
+
+# 添加 src 到路徑
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import pandas as pd
 import numpy as np
-import os
-from strategies import detect_htf, detect_vcp, detect_cup, eval_R_outcome
+from src.strategies.cup import detect_cup
+from src.strategies.htf import detect_htf
+from src.strategies.vcp import detect_vcp
+from src.strategies import eval_R_outcome
+from src.utils.data_loader import loader
 
 # --- Configuration ---
-INPUT_FILE = './2023_2025_daily_stock_info.csv'
-OUTPUT_FILE = './pattern_analysis_result.csv'
-MARKET_FILE = './market_data.csv'
+OUTPUT_FILE = os.path.join(os.path.dirname(__file__), '../data/processed/pattern_analysis_result.csv')
+MARKET_FILE = os.path.join(os.path.dirname(__file__), '../data/raw/market_data.csv')
 WINDOW_DAYS = 126  # Approx 6 months
-
-# Column mapping
-COL_NAMES = ['sid', 'name', 'date', 'open', 'high', 'low', 'close', 'volume']
 
 def load_market_data():
     if not os.path.exists(MARKET_FILE):
@@ -19,19 +24,30 @@ def load_market_data():
     # Ensure date is string YYYY-MM-DD
     return df.set_index('date')
 
-def main():
-    if not os.path.exists(INPUT_FILE):
-        print(f"Error: Input file {INPUT_FILE} not found.")
-        return
+def load_data():
+    """Load and prepare data using DataLoader"""
+    print("Loading data...", flush=True)
+    df = loader.load_data() # Load all history
+    
+    if df.empty:
+        print("No data loaded.")
+        return None
+        
+    # Convert types
+    numeric_cols = ['open', 'high', 'low', 'close', 'volume']
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+    df['date'] = pd.to_datetime(df['date'])
+    return df
 
+def main():
     market_df = load_market_data()
     if market_df is None:
         print("Warning: Market data not found. Proceeding without market filter.")
     else:
         print("Market data loaded.")
 
-    print("Loading data...", flush=True)
-    df = pd.read_csv(INPUT_FILE, header=None, names=COL_NAMES + [f'col_{i}' for i in range(8, 20)]) 
     df = df[COL_NAMES].copy()
     
     # Pre-calculate 52-week RS Rating

@@ -5,11 +5,13 @@ import os
 import time
 from datetime import datetime, date
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import sys
+import os
 
-# --- Configuration ---
-PATTERN_FILE = './pattern_analysis_result.csv'
-OUTPUT_REPORT = './backtest_report_v2.md'
-OUTPUT_CSV = './backtest_results_v2.csv'
+# 設定檔案路徑
+PATTERN_FILE = os.path.join(os.path.dirname(__file__), '../data/processed/pattern_analysis_result.csv')
+OUTPUT_FILE = os.path.join(os.path.dirname(__file__), '../data/processed/backtest_results_v2.csv')
+STOCK_INFO_FILE = os.path.join(os.path.dirname(__file__), '../data/raw/2023_2025_daily_stock_info.csv')
 
 # --- Capital Management Settings ---
 INITIAL_CAPITAL = 1_000_000
