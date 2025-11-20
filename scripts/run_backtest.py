@@ -11,6 +11,7 @@ import os
 # 設定檔案路徑
 PATTERN_FILE = os.path.join(os.path.dirname(__file__), '../data/processed/pattern_analysis_result.csv')
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), '../data/processed/backtest_results_v2.csv')
+OUTPUT_REPORT = os.path.join(os.path.dirname(__file__), '../data/processed/backtest_report_v2.md')
 STOCK_INFO_FILE = os.path.join(os.path.dirname(__file__), '../data/raw/2023_2025_daily_stock_info.csv')
 
 # --- Capital Management Settings ---
@@ -325,12 +326,21 @@ def calculate_metrics(trades, scenario_name, settings_str):
     max_win_streak = streak[streak['first']]['count'].max() if not streak.empty else 0
     max_loss_streak = streak[~streak['first']]['count'].max() if not streak.empty else 0
     
+    # Annualized Return
+    days = (max_date - min_date).days
+    if days > 0:
+        years = days / 365.25
+        ann_ret = (final_equity / INITIAL_CAPITAL) ** (1 / years) - 1
+    else:
+        ann_ret = 0
+        
     return {
         'Strategy': scenario_name,
         'Settings': settings_str,
-        'Count': count,
+        'Trades': count,
         'Win Rate': round(win_rate * 100, 1),
         'Return %': round(ret_pct * 100, 1),
+        'Ann. Return %': round(ann_ret * 100, 1),
         'Max DD %': round(max_dd * 100, 1),
         'Sharpe': round(sharpe, 2),
         'Max Win Streak': int(max_win_streak) if not pd.isna(max_win_streak) else 0,
@@ -410,16 +420,21 @@ def main():
         # Sort for better readability
         df_res = df_res.sort_values(by=['Strategy', 'Sharpe'], ascending=[True, False])
         
-        df_res.to_csv(OUTPUT_CSV, index=False)
-        print(f"Saved CSV to {OUTPUT_CSV}")
+        # Reorder columns
+        cols = ['Strategy', 'Settings', 'Ann. Return %', 'Return %', 'Sharpe', 'Trades', 'Win Rate']
+        df_res = df_res[cols]
         
-        with open(OUTPUT_REPORT, 'w') as f:
-            f.write(f"# Backtest Report V2\nGenerated: {datetime.now()}\n\n")
-            f.write(df_res.to_markdown(index=False))
-            
-        print("Report generated.")
-    else:
-        print("No trades generated.")
+        df_res.to_csv(OUTPUT_FILE, index=False)
+        print(f"Saved CSV to {OUTPUT_FILE}")
+    
+    with open(OUTPUT_REPORT, 'w') as f:
+        f.write(f"# Backtest Report V2\nGenerated: {datetime.now()}\n\n")
+        if final_results:
+             f.write(df_res.to_markdown(index=False))
+        else:
+             f.write("No trades generated.")
+        
+    print("Report generated.")
         
     print(f"Total Time: {time.time() - start_t:.2f}s")
 

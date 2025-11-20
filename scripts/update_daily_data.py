@@ -86,12 +86,12 @@ def main():
         else:
             print(f"No quotes data for {formatted_date} (Holiday?)")
             
-        # B. Fetch Institutional
-        inst_df = crawler.fetch_institutional(date_str)
-        if inst_df is not None and not inst_df.empty:
-            output_path = os.path.join(INST_DIR, f"{formatted_date}.csv")
-            inst_df.to_csv(output_path, index=False)
-            print(f"Saved institutional data for {formatted_date}")
+        # B. Fetch Institutional (Disabled per user request)
+        # inst_df = crawler.fetch_institutional(date_str)
+        # if inst_df is not None and not inst_df.empty:
+        #     output_path = os.path.join(INST_DIR, f"{formatted_date}.csv")
+        #     inst_df.to_csv(output_path, index=False)
+        #     print(f"Saved institutional data for {formatted_date}")
             
         # C. Fetch Market Index
         index_data = crawler.fetch_market_index(date_str)

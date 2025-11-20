@@ -75,7 +75,7 @@ def load_data():
     df['low52'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(252).min())
     df['vol_ma50'] = df.groupby('sid')['volume'].transform(lambda x: x.rolling(50).mean())
     
-    return df
+    return df, latest_date
 
 def scan_latest_date(df):
     """掃描最新日期的股票"""
@@ -132,11 +132,12 @@ def scan_latest_date(df):
             if current_price <= cup_stop:
                 continue  # 型態已破壞，跳過
             
-            # 驗證 2: 是否尚未突破（等待買入）
+            # 狀態判斷
+            status = "等待突破"
             if current_price >= cup_buy:
-                continue  # 已經突破，不是新訊號
+                status = "已突破"
             
-            # ✅ 通過驗證：這是有效的待突破訊號
+            # 計算距離與風險
             risk_pct = (cup_buy - cup_stop) / cup_buy * 100
             distance_pct = (cup_buy - current_price) / cup_buy * 100
             
@@ -151,7 +152,8 @@ def scan_latest_date(df):
                 'rs_rating': round(rs_rating, 1),
                 'grade': 'N/A',
                 'current_price': round(row_today['close'], 2),
-                'distance_pct': round(distance_pct, 2)  # 距離買入點的百分比
+                'distance_pct': round(distance_pct, 2),
+                'status': status
             })
         
         # 檢測 HTF
@@ -163,11 +165,12 @@ def scan_latest_date(df):
             if current_price <= htf_stop:
                 continue  # 型態已破壞，跳過
             
-            # 驗證 2: 是否尚未突破（等待買入）
+            # 狀態判斷
+            status = "等待突破"
             if current_price >= htf_buy:
-                continue  # 已經突破，不是新訊號
+                status = "已突破"
             
-            # ✅ 通過驗證：這是有效的待突破訊號
+            # 計算距離與風險
             risk_pct = (htf_buy - htf_stop) / htf_buy * 100
             distance_pct = (htf_buy - current_price) / htf_buy * 100
             
@@ -182,7 +185,8 @@ def scan_latest_date(df):
                 'rs_rating': round(rs_rating, 1),
                 'grade': htf_grade if htf_grade else 'C',
                 'current_price': round(row_today['close'], 2),
-                'distance_pct': round(distance_pct, 2)  # 距離買入點的百分比
+                'distance_pct': round(distance_pct, 2),
+                'status': status
             })
         
         # 檢測 VCP（可選，因為表現不佳）
@@ -199,6 +203,17 @@ def generate_report(signals, scan_date):
     """生成報告"""
     if not signals:
         print("\n❌ 未發現符合條件的訊號")
+        # Create empty report
+        with open(OUTPUT_REPORT, 'w', encoding='utf-8') as f:
+            f.write(f"# 股票訊號報告\n")
+            f.write(f"**掃描日期**: {scan_date}\n")
+            f.write(f"**訊號數量**: 0\n\n")
+            f.write("---\n\n")
+            f.write("本日無符合條件的型態訊號。\n")
+        print(f"✅ 空報告已儲存至: {OUTPUT_REPORT}")
+        
+        # Create empty CSV with headers
+        pd.DataFrame(columns=['date', 'sid', 'name', 'pattern', 'buy_price', 'stop_price', 'risk_pct', 'rs_rating', 'grade', 'current_price', 'distance_pct', 'status']).to_csv(OUTPUT_CSV, index=False)
         return
     
     # 轉換為 DataFrame
@@ -219,42 +234,41 @@ def generate_report(signals, scan_date):
     cup_signals = df_signals[df_signals['pattern'] == 'CUP']
     if not cup_signals.empty:
         report_lines.append(f"## 🏆 CUP 型態訊號 ({len(cup_signals)} 檔)\n")
-        report_lines.append("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | 風險% | RS Rating |")
-        report_lines.append("|---------|---------|--------|--------|--------|-------|-------|-----------|")
+        report_lines.append("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | 狀態 | RS Rating |")
+        report_lines.append("|---------|---------|--------|--------|--------|-------|------|-----------|")
         for _, row in cup_signals.sort_values('distance_pct').iterrows():
             report_lines.append(
                 f"| {row['sid']} | {row['name']} | {row['current_price']} | "
                 f"{row['buy_price']} | {row['stop_price']} | {row['distance_pct']}% | "
-                f"{row['risk_pct']}% | {row['rs_rating']} |"
+                f"{row['status']} | {row['rs_rating']} |"
             )
         report_lines.append("\n**建議策略**: R=3.0, T=20 (目標 3R，20天出場)\n")
-        report_lines.append("**註**: 距離% = 當前價距離買入價的百分比（越小越接近突破）\n")
+        report_lines.append("**註**: 距離% = 當前價距離買入價的百分比（負值代表已突破）\n")
         report_lines.append("---\n")
     
     # HTF 訊號
     htf_signals = df_signals[df_signals['pattern'] == 'HTF']
     if not htf_signals.empty:
         report_lines.append(f"## 🚀 HTF 型態訊號 ({len(htf_signals)} 檔)\n")
-        report_lines.append("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | 風險% | Grade | RS Rating |")
-        report_lines.append("|---------|---------|--------|--------|--------|-------|-------|-------|-----------|")
+        report_lines.append("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | 狀態 | Grade | RS Rating |")
+        report_lines.append("|---------|---------|--------|--------|--------|-------|------|-------|-----------|")
         for _, row in htf_signals.sort_values('distance_pct').iterrows():
             report_lines.append(
                 f"| {row['sid']} | {row['name']} | {row['current_price']} | "
                 f"{row['buy_price']} | {row['stop_price']} | {row['distance_pct']}% | "
-                f"{row['risk_pct']}% | {row['grade']} | {row['rs_rating']} |"
+                f"{row['status']} | {row['grade']} | {row['rs_rating']} |"
             )
         report_lines.append("\n**建議策略**: Trig=1.5R, Trail=MA20 (追蹤止損)\n")
-        report_lines.append("**註**: 距離% = 當前價距離買入價的百分比（越小越接近突破）\n")
+        report_lines.append("**註**: 距離% = 當前價距離買入價的百分比（負值代表已突破）\n")
         report_lines.append("---\n")
     
     # 輸出到終端
     print("\n" + "\n".join(report_lines))
     
     # 儲存 Markdown
-    report_file = f'./latest_signals_report.md'
-    with open(report_file, 'w', encoding='utf-8') as f:
+    with open(OUTPUT_REPORT, 'w', encoding='utf-8') as f:
         f.write("\n".join(report_lines))
-    print(f"✅ 報告已儲存至: {report_file}")
+    print(f"✅ 報告已儲存至: {OUTPUT_REPORT}")
 
 def main():
     """主程式"""
@@ -262,8 +276,13 @@ def main():
     print("每日股票訊號掃描器")
     print("=" * 60)
     
-    # 載入數據
-    df = load_and_prepare_data()
+    # 1. 載入數據
+    result = load_data()
+    if result is None:
+        return
+    df, latest_date = result
+    if df is None:
+        return
     
     # 掃描最新日期
     signals, scan_date = scan_latest_date(df)

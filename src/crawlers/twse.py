@@ -121,11 +121,38 @@ class TWSECrawler:
             if data.get('stat') != 'OK':
                 return None
                 
-            # T86 usually has one main table
-            if not data.get('data'):
-                return None
+            # Check if response contains 'tables' (New format)
+            if 'tables' in data:
+                tables = data['tables']
+                target_table = None
+                for table in tables:
+                    fields = table.get('fields', [])
+                    if '證券代號' in fields and '收盤價' in fields: # Note: '收盤價' is typically for daily quotes, not institutional data.
+                        target_table = table
+                        break
                 
-            df = pd.DataFrame(data['data'], columns=data['fields'])
+                if target_table:
+                    fields = target_table['fields']
+                    raw_data = target_table['data']
+                else:
+                    print(f"Error: Could not find stock data table in response for {date_str}")
+                    return None
+            # Fallback to old format
+            elif 'fields9' in data and 'data9' in data:
+                fields = data['fields9']
+                raw_data = data['data9']
+            elif 'fields8' in data and 'data8' in data:
+                fields = data['fields8']
+                raw_data = data['data8']
+            else:
+                # Original logic for T86 usually has data and fields directly
+                if not data.get('data') or not data.get('fields'):
+                    print(f"Error: Unexpected data format for {date_str}")
+                    return None
+                fields = data['fields']
+                raw_data = data['data']
+                
+            df = pd.DataFrame(raw_data, columns=fields)
             
             # Rename columns (Foreign, Investment Trust, Dealer)
             # Fields: 證券代號, 證券名稱, 外陸資買賣超股數(不含外資自營商), 投信買賣超股數, 自營商買賣超股數, ...
@@ -165,7 +192,16 @@ class TWSECrawler:
             
             # Clean numbers
             for col in ['foreign_net', 'trust_net', 'dealer_net']:
-                df[col] = df[col].astype(str).str.replace(',', '').astype(float)
+                # Ensure we are working with strings first, then replace comma
+                # If it's already numeric (somehow), astype(str) handles it.
+                # The issue might be that apply is receiving the whole series if not careful?
+                # No, apply on Series works element-wise.
+                # The error '0 0\n1 0...' suggests we might be trying to convert a Series to float directly somewhere?
+                # Ah, wait. If I did df[col] = df[col].apply(...), that's correct.
+                # But maybe the previous failed attempt left it in a weird state? No, it's a fresh fetch.
+                # Let's use a more robust way:
+                df[col] = df[col].astype(str).str.replace(',', '')
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 
             return df
             
