@@ -128,7 +128,7 @@ def main():
             # Pass rs_rating to VCP
             is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], rs_rating=rs_rating) 
             is_htf, htf_buy, htf_stop = detect_htf(window, rs_rating=rs_rating) 
-            is_cup, cup_buy, cup_stop = detect_cup(window, ma_info) # Can add market_trend later
+            is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
             
             # ... (Outcome Eval) ...
             vcp_2R = vcp_3R = vcp_4R = vcp_stop_hit = False

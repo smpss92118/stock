@@ -128,4 +128,28 @@
     - 無需對 HTF 進行額外的 RS 過濾。
     - 下一步 (Cycle 6) 將轉向優化 **CUP (Cup with Handle)** 策略。CUP 的形成時間較長，相對強度可能不如 HTF 極端，因此 RS 過濾可能會有幫助。
 
+## Cycle 6: CUP Optimization with RS (CUP + RS)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: CUP
+    - **New Filter**: `RS Rating > 0`
+- **Results (Limited Capital)**:
+    - **CUP (R=3.0, T=20)**:
+        - Return: **184.9%** (Improved from Baseline 152.5%)
+        - Win Rate: **59.6%** (Improved from 56.7%)
+        - Count: 272 (Slightly reduced from 284)
+    - **CUP (R=2.0, T=20)**:
+        - Return: 117.4% (Dropped from 133.1%)
+- **Analysis**:
+    - RS 過濾顯著提升了 CUP 策略的獲利能力 (152% -> 185%)。
+    - **原因**：Cup 型態通常歷時較長 (3-6個月)，期間大盤可能經歷波動。RS 過濾確保了在型態完成時，該股票仍強於大盤，這增加了突破後持續上漲的機率。
+    - R=3.0 的表現優於 R=2.0，顯示強勢股有更大的上漲空間，太早停利反而會錯失利潤。
+- **Conclusion**:
+    - CUP 策略應納入 RS 過濾。
+    - 目前三大策略最佳配置：
+        1. **HTF**: 288% (Trig=1.5R, Trail=MA20) - 無需 RS
+        2. **CUP**: 185% (R=3.0, T=20) - 需 RS
+        3. **VCP**: 156% (Trig=2.0R, Trail=MA20) - 需 RS
+    - 下一步 (Cycle 7) 將嘗試 **放寬 HTF 條件** (Min Up 80% -> 60%) 但保留 RS 過濾，看能否在保持高勝率的同時增加交易機會。
+
 ---

@@ -3,6 +3,7 @@ import pandas as pd
 
 def detect_cup(window,
                ma_info, # Dict with last values of MAs: {'ma50':, 'ma150':, 'ma200':, 'low52':}
+               rs_rating=0.0, # New in Cycle 6
                min_depth=0.12,
                max_depth=0.33,
                handle_max_depth=0.15):
@@ -14,6 +15,10 @@ def detect_cup(window,
     n = len(window)
     if n < 40: return False, np.nan, np.nan
     
+    # 0. RS Filter (Cycle 6)
+    if rs_rating < 0:
+        return False, np.nan, np.nan
+
     current_price = close[-1]
 
     # 1. Trend Template Check (Minervini)
