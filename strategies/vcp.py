@@ -5,7 +5,8 @@ from .utils import get_zigzag_pivots
 def detect_vcp(window,
                vol_ma50_val, # Scalar
                price_ma50_val, # Scalar
-               rs_rating=0.0, # Relative Strength (Stock Return - Market Return)
+               rs_rating=0.0, # RS Rating (Percentile 0-100)
+               high_52w=np.nan, # 52-week High
                zigzag_threshold=0.05, 
                min_up_ratio=0.5, 
                vol_dry_up_ratio=0.5):
@@ -18,10 +19,16 @@ def detect_vcp(window,
     n = len(window)
     if n < 50: return False, np.nan, np.nan
 
-    # 0. RS Filter (New in Cycle 4)
-    # Require Stock to outperform Market (RS > 0)
-    if rs_rating < 0:
+    # 0. Advanced Filters (Cycle 8)
+    # 0.1 RS Rating > 70
+    if rs_rating < 70:
         return False, np.nan, np.nan
+        
+    # 0.2 Location: Within 15% of 52-week High
+    # Price > 0.85 * 52-week High
+    if not np.isnan(high_52w) and high_52w > 0:
+        if close[-1] < 0.85 * high_52w:
+            return False, np.nan, np.nan
 
     start_price = close[0]
     if start_price == 0: return False, np.nan, np.nan

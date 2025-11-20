@@ -152,4 +152,40 @@
         3. **VCP**: 156% (Trig=2.0R, Trail=MA20) - 需 RS
     - 下一步 (Cycle 7) 將嘗試 **放寬 HTF 條件** (Min Up 80% -> 60%) 但保留 RS 過濾，看能否在保持高勝率的同時增加交易機會。
 
+## Cycle 7: Relaxed HTF with RS (HTF 寬鬆版)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: HTF
+    - **Parameter**: `min_up_ratio`: 0.8 -> 0.6
+    - **Filter**: `RS Rating > 0` (Kept)
+- **Results (Limited Capital)**:
+    - **HTF (Trig=1.5R, Trail=MA20)**:
+        - Return: **288.3%** (Identical to Cycle 5)
+        - Count: 275 (Identical)
+- **Analysis**:
+    - 放寬漲幅限制似乎沒有顯著增加交易次數或改變結果。這可能意味著大部分 HTF 的漲幅本來就很高，或者篩選邏輯中有其他瓶頸（如 flag_days）。
+- **Conclusion**:
+    - 維持 HTF 現狀。
+
+## Cycle 8: VCP Advanced Part 1 (RS > 70 & Location)
+- **Date**: 2025-11-20
+- **Changes**:
+    - **Strategy**: VCP
+    - **New Filter 1**: `RS Rating > 70` (52-week Return Percentile)
+    - **New Filter 2**: `Location`: Price within 15% of 52-week High (`Close >= 0.85 * High52`)
+- **Results**:
+    - **Limited Capital (Trig=2.0R, Trail=MA20)**:
+        - Return: **95.8%** (Dropped from 155.7% in Cycle 4)
+        - Sharpe: 0.58
+        - Count: 302
+    - **Unlimited Capital (Trig=2.0R, Trail=MA20)**:
+        - Return: **358.0%** (Improved from 345.5% in Cycle 4)
+        - Sharpe: **1.00** (Significant Improvement from 0.78)
+- **Analysis**:
+    - **質量 vs 數量**：嚴格的篩選條件（RS>70, Near High）顯著提升了交易的質量（Unlimited Sharpe 1.0 是目前最高），證明了這些濾網能挑選出更穩健的標的。
+    - **資金效率**：然而，在資金有限（Limited）的情境下，由於交易機會減少，資金閒置時間變長，導致總報酬率下降。
+    - **結論**：這些濾網有效提升了單筆交易的期望值，但對於追求絕對報酬的積極策略來說，可能過於保守。
+- **Next Step**:
+    - 進入 **Cycle 9**，實施更細緻的「收縮比率」和「成交量」規則。這可能會進一步過濾訊號，我們需要觀察是否能通過提高勝率來彌補頻率的下降。
+
 ---

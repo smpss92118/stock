@@ -34,13 +34,39 @@ def main():
     df = pd.read_csv(INPUT_FILE, header=None, names=COL_NAMES + [f'col_{i}' for i in range(8, 20)]) 
     df = df[COL_NAMES].copy()
     
-    for col in ['open', 'high', 'low', 'close', 'volume']:
+    # Pre-calculate 52-week RS Rating
+    # 1. Calculate 52-week return for each stock
+    # 2. Group by date and calculate percentile rank
+    print("Calculating RS Ratings...", flush=True)
+    df['close'] = pd.to_numeric(df['close'], errors='coerce')
+    df['date'] = pd.to_datetime(df['date'])
+    df.sort_values(['sid', 'date'], inplace=True)
+    
+    # 252 trading days approx 52 weeks
+    df['return_52w'] = df.groupby('sid')['close'].pct_change(periods=252)
+    
+    # Calculate Percentile Rank per Date
+    # We need to handle NaN values (first 252 days will be NaN)
+    # Use transform to keep original index
+    df['rs_rating'] = df.groupby('date')['return_52w'].transform(
+        lambda x: x.rank(pct=True) * 100
+    )
+    
+    # Pre-calculate 52-week High
+    df['high_52w'] = df.groupby('sid')['high'].transform(
+        lambda x: x.rolling(window=252, min_periods=1).max()
+    )
+    
+    # Convert date back to string for compatibility
+    df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+
+    print("Calculating Indicators...", flush=True)
+    for col in ['open', 'high', 'low', 'volume']: # 'close' is already converted
         df[col] = pd.to_numeric(df[col], errors='coerce')
     
     df.dropna(subset=['sid', 'date', 'close'], inplace=True)
     df.sort_values(['sid', 'date'], inplace=True)
     
-    print("Calculating Indicators...", flush=True)
     # Calculate MAs and 52-week Low globally (grouped)
     # Using transform to keep shape
     df['ma50'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(50).mean())
@@ -102,31 +128,13 @@ def main():
                     }
                     
                     # 2. Relative Strength (RS)
-                    # Compare 6-month return (Window Return) vs Market 6-month return
-                    # Window start index is i - WINDOW_DAYS + 1
-                    # Market data needs to be aligned.
-                    # Let's approximate: Stock Change % vs Market Change % over same period
+                    # Use pre-calculated rs_rating
+                    rs_rating = row_today['rs_rating']
                     
-                    # Stock Return (already calc as 'up' in detect functions, but let's do it here)
-                    stock_start_price = window.iloc[0]['close']
-                    stock_return = (row_today['close'] - stock_start_price) / stock_start_price if stock_start_price > 0 else 0
-                    
-                    # Market Return
-                    # Find market price at window start
-                    start_date_str = window.iloc[0]['date']
-                    if start_date_str in market_df.index:
-                        market_start_price = market_df.loc[start_date_str]['close']
-                        market_return = (m_row['close'] - market_start_price) / market_start_price
-                        
-                        # RS: Simple difference or Ratio? 
-                        # Let's use difference: Stock Return - Market Return
-                        rs_rating = stock_return - market_return
-                    else:
-                        rs_rating = 0.0 # No data
-            
             # Detect Patterns
-            # Pass rs_rating to VCP
-            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], rs_rating=rs_rating) 
+            # Pass rs_rating and high_52w to VCP
+            high_52w = row_today['high_52w']
+            is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], rs_rating=rs_rating, high_52w=high_52w) 
             is_htf, htf_buy, htf_stop = detect_htf(window, rs_rating=rs_rating) 
             is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
             
