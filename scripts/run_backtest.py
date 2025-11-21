@@ -81,9 +81,11 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
     
     candidates = []
     
-    for sid, sigs_df in sig_partitions.items():
-        if sid not in all_partitions: continue
-        stock_df = all_partitions[sid]
+    for sid_key, sigs_df in sig_partitions.items():
+        if sid_key not in all_partitions: continue
+        stock_df = all_partitions[sid_key]
+        
+        sid = sid_key[0] if isinstance(sid_key, tuple) else sid_key
         
         # Convert to numpy/list for fast indexing
         high_np = stock_df["high"].to_numpy()
@@ -206,6 +208,8 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
             # Add candidate
             if exit_abs != -1:
                 candidates.append({
+                    'sid': sid,
+                    'buy_price': buy,
                     'entry_date': entry_date,
                     'exit_date': date_list[exit_abs],
                     'pnl': pnl,
@@ -218,7 +222,12 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
 def run_capital_simulation(candidates, mode='limited'):
     """
     mode: 'limited' (100W, 10 pos) or 'unlimited'
+    
+    Note: No Pyramiding restriction REMOVED - same stock can have multiple positions
     """
+    if not candidates:
+        return []
+    
     # Sort by entry date is crucial for FIFO
     candidates.sort(key=lambda x: x['entry_date'])
     
@@ -235,7 +244,7 @@ def run_capital_simulation(candidates, mode='limited'):
             
     elif mode == 'limited':
         current_cash = INITIAL_CAPITAL
-        active_positions = [] # list of {'exit_date': date, 'cost': float, 'current_value': float}
+        active_positions = [] # list of {'sid', 'exit_date', 'cost', 'return_cash'}
         
         for t in candidates:
             today = t['entry_date']
@@ -258,6 +267,9 @@ def run_capital_simulation(candidates, mode='limited'):
             position_size = total_equity * POSITION_SIZE_PCT
             
             # 4. Try to Enter
+            # REMOVED: No Pyramiding check - allow same stock multiple times
+            # Only check: position limit and cash availability
+            
             if len(active_positions) < MAX_POSITIONS and current_cash >= position_size:
                 current_cash -= position_size
                 
@@ -265,6 +277,7 @@ def run_capital_simulation(candidates, mode='limited'):
                 return_cash = position_size + profit
                 
                 active_positions.append({
+                    'sid': t['sid'],
                     'exit_date': t['exit_date'],
                     'return_cash': return_cash,
                     'cost': position_size  # Track cost for equity calculation
@@ -334,6 +347,9 @@ def calculate_metrics(trades, scenario_name, settings_str):
     else:
         ann_ret = 0
         
+    # Average Holding Days
+    avg_holding_days = df['duration'].mean() if 'duration' in df.columns else 0
+
     return {
         'Strategy': scenario_name,
         'Settings': settings_str,
@@ -345,6 +361,7 @@ def calculate_metrics(trades, scenario_name, settings_str):
         'Sharpe': round(sharpe, 2),
         'Max Win Streak': int(max_win_streak) if not pd.isna(max_win_streak) else 0,
         'Max Loss Streak': int(max_loss_streak) if not pd.isna(max_loss_streak) else 0,
+        'Avg Holding Days': round(avg_holding_days, 1),
         'Total Profit': int(total_profit)
     }
 
@@ -421,7 +438,8 @@ def main():
         df_res = df_res.sort_values(by=['Strategy', 'Sharpe'], ascending=[True, False])
         
         # Reorder columns
-        cols = ['Strategy', 'Settings', 'Ann. Return %', 'Return %', 'Sharpe', 'Trades', 'Win Rate']
+        cols = ['Strategy', 'Settings', 'Ann. Return %', 'Return %', 'Sharpe', 'Trades', 'Win Rate', 
+                'Avg Holding Days', 'Max DD %', 'Max Win Streak', 'Max Loss Streak']
         df_res = df_res[cols]
         
         df_res.to_csv(OUTPUT_FILE, index=False)

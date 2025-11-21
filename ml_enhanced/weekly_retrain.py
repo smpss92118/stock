@@ -55,6 +55,17 @@ def main():
     except Exception as e:
         logger.error(f"❌ Model training failed: {e}")
         return
+
+    # 3. 執行回測驗證
+    logger.info("\n>>> Step 3: Running ML Backtest...")
+    try:
+        from ml_enhanced.scripts.run_ml_backtest import main as run_backtest
+        run_backtest()
+        logger.info("✅ Backtest complete")
+    except Exception as e:
+        logger.error(f"❌ Backtest failed: {e}")
+        # Don't return, still show completion message
+
     
     logger.info("\n" + "="*80)
     logger.info("Weekly Retraining Complete!")
@@ -62,7 +73,10 @@ def main():
     logger.info("\nModels updated:")
     logger.info("  - stock/ml_enhanced/models/stock_selector.pkl")
     logger.info("  - stock/ml_enhanced/models/position_sizer.pkl")
+    logger.info("  - stock/ml_enhanced/models/position_sizer.pkl")
     logger.info("  - stock/ml_enhanced/models/feature_info.pkl")
+    logger.info("  - stock/ml_enhanced/results/ml_backtest_final.csv")
+    logger.info("  - stock/ml_enhanced/results/ml_backtest_final.md")
     logger.info("\nNext steps:")
     logger.info("  - New models will be used in tomorrow's daily scan")
     logger.info("  - Monitor performance in daily reports")

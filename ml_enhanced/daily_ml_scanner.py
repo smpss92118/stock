@@ -40,6 +40,7 @@ from src.ml.features import extract_ml_features
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models/stock_selector.pkl')
 FEATURE_INFO_PATH = os.path.join(os.path.dirname(__file__), 'models/feature_info.pkl')
 OUTPUT_BASE = os.path.join(os.path.dirname(__file__), 'daily_reports')
+BACKTEST_RESULTS_PATH = os.path.join(os.path.dirname(__file__), 'results/ml_backtest_final.csv')
 
 # Setup Logger
 logger = setup_logger('daily_ml_scanner')
@@ -55,6 +56,18 @@ def load_ml_model():
     except Exception as e:
         logger.error(f"⚠️ ML 模型載入失敗: {e}")
         return None, None
+
+def load_backtest_results():
+    """載入回測結果"""
+    try:
+        if not os.path.exists(BACKTEST_RESULTS_PATH):
+            return None
+        
+        df = pd.read_csv(BACKTEST_RESULTS_PATH)
+        return df
+    except Exception as e:
+        logger.error(f"⚠️ 回測結果載入失敗: {e}")
+        return None
 
 def predict_signal_quality(model, feature_cols, features_dict):
     """預測訊號品質"""
@@ -345,19 +358,35 @@ def generate_ml_report(signals, scan_date, df_full=None):
             
             f.write("---\n\n")
         
-        # Top Strategies
-        f.write("## 🏆 Top 3 Strategies (ML-Enhanced)\n\n")
-        f.write("### 依年化報酬排序\n\n")
-        f.write("1. **CUP Fixed (R=2.0, T=20) + ML 0.4**: 年化 171.1%, Sharpe 2.99\n")
-        f.write("2. **HTF Trailing (1.5R, MA20) 原始**: 年化 153.4%, Sharpe 1.19\n")
-        f.write("3. **HTF Fixed (R=2.0, T=20) + ML 0.4**: 年化 145.5%, Sharpe 2.87\n\n")
-        
-        f.write("### 依 Sharpe Ratio 排序\n\n")
-        f.write("1. **CUP Fixed (R=2.0, T=20) + ML 0.4**: Sharpe 2.99, 年化 171.1%\n")
-        f.write("2. **HTF Fixed (R=2.0, T=20) + ML 0.4**: Sharpe 2.87, 年化 145.5%\n")
-        f.write("3. **CUP Fixed (R=3.0, T=20) + ML 0.4**: Sharpe 2.62, 年化 193.5%\n\n")
-        
-        f.write("---\n\n")
+        # Top Strategies (Dynamic)
+        backtest_df = load_backtest_results()
+        if backtest_df is not None and not backtest_df.empty:
+            f.write("## 🏆 Top 3 Strategies (ML-Enhanced)\n\n")
+            
+            # Sort by Annual Return
+            top_strategies = backtest_df.sort_values('Ann. Return %', ascending=False).head(3)
+            
+            f.write("### 依年化報酬排序\n\n")
+            for i, (_, row) in enumerate(top_strategies.iterrows(), 1):
+                strategy_name = row['Strategy']
+                ann_ret = row['Ann. Return %']
+                sharpe = row['Sharpe']
+                avg_hold = row.get('Avg Holding Days', 'N/A')
+                max_win = row.get('Max Win Streak', 'N/A')
+                max_loss = row.get('Max Loss Streak', 'N/A')
+                mdd = row.get('Max DD %', 'N/A')
+                
+                f.write(f"{i}. **{strategy_name}**\n")
+                f.write(f"   - 年化報酬: **{ann_ret}%**, Sharpe: **{sharpe}**\n")
+                f.write(f"   - 平均持倉: {avg_hold} 天, MDD: {mdd}%\n")
+                f.write(f"   - 連勝/連敗: {max_win} / {max_loss}\n\n")
+            
+            f.write("---\n\n")
+        else:
+            # Fallback if no backtest results
+            f.write("## 🏆 Top 3 Strategies (ML-Enhanced)\n\n")
+            f.write("> ⚠️ 無法載入最新回測結果，請檢查 ml_backtest_final.csv\n\n")
+            f.write("---\n\n")
         
         # 交易策略說明
         f.write("## 📖 交易策略說明\n\n")
