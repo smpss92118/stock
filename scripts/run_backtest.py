@@ -3,10 +3,17 @@ import numpy as np
 import pandas as pd
 import os
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta # Added timedelta
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
-import os
+
+# Add project root to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(project_root)
+
+# Import logger
+from src.utils.logger import setup_logger
+logger = setup_logger('run_backtest')
 
 # 設定檔案路徑
 PATTERN_FILE = os.path.join(os.path.dirname(__file__), '../data/processed/pattern_analysis_result.csv')
@@ -21,7 +28,7 @@ POSITION_SIZE_PCT = 0.10  # 10% per trade (100k)
 RISK_FREE_RATE = 0.02     # For Sharpe Ratio
 
 def load_data_polars():
-    print("Loading data with Polars...", flush=True)
+    logger.debug("Loading pattern analysis data")
     try:
         df = pl.read_csv(
             PATTERN_FILE,
@@ -29,7 +36,7 @@ def load_data_polars():
             infer_schema_length=10000
         )
     except Exception as e:
-        print(f"Error loading file: {e}")
+        logger.error(f"Failed to load pattern data: {e}")
         return None
     
     # Cast numeric columns
@@ -45,7 +52,7 @@ def load_data_polars():
         pl.col("close").rolling_mean(window_size=50).over("sid").alias("ma50")
     ])
     
-    print(f"Data loaded: {df.shape[0]:,} rows. Columns: {df.columns}", flush=True)
+    logger.debug(f"Loaded {df.shape[0]:,} rows, {len(df.columns)} columns")
     return df
 
 # --- Core Engine: Trade Extractor ---
@@ -418,7 +425,7 @@ def main():
                 params = {'trigger_r': trig, 'trail_ma': ma}
                 tasks.append((s, 'trailing', params))
                 
-    print(f"Running {len(tasks)} simulation tasks...")
+    logger.info(f"Running backtest: {len(tasks)} strategies")
     
     final_results = []
     with ProcessPoolExecutor(max_workers=min(os.cpu_count(), 6)) as ex:
@@ -429,7 +436,7 @@ def main():
                 res = fut.result()
                 final_results.extend(res)
             except Exception as e:
-                print(f"Task failed: {e}")
+                logger.error(f"Strategy failed: {e}")
                 
     if final_results:
         df_res = pd.DataFrame(final_results)
@@ -443,7 +450,7 @@ def main():
         df_res = df_res[cols]
         
         df_res.to_csv(OUTPUT_FILE, index=False)
-        print(f"Saved CSV to {OUTPUT_FILE}")
+        logger.info(f"Backtest results saved: {os.path.basename(OUTPUT_FILE)}")
     
     with open(OUTPUT_REPORT, 'w') as f:
         f.write(f"# Backtest Report V2\nGenerated: {datetime.now()}\n\n")
@@ -452,9 +459,9 @@ def main():
         else:
              f.write("No trades generated.")
         
-    print("Report generated.")
+    logger.debug("Markdown report generated")
         
-    print(f"Total Time: {time.time() - start_t:.2f}s")
+    logger.info(f"Backtest completed in {time.time() - start_t:.1f}s")
 
 if __name__ == "__main__":
     main()

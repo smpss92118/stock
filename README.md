@@ -179,6 +179,7 @@ stock/.venv/bin/python stock/ml_enhanced/weekly_retrain.py
 
 ## 📖 文檔
 
+- **[回測引擎完整邏輯](docs/backtest_engine_logic.md)** - 詳細說明策略獨立性、進出場規則、資金管理 ⭐
 - [`ml_enhanced/README.md`](ml_enhanced/README.md) - ML 系統詳細說明
 - [`ml_enhanced/CRONTAB_SETUP.md`](ml_enhanced/CRONTAB_SETUP.md) - 自動化設定
 - [`docs/pattern_logic.md`](docs/pattern_logic.md) - 型態定義細節
