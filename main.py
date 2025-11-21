@@ -188,16 +188,30 @@ def generate_report_content():
                 max_win = row.get('Max Win Streak', 'N/A')
                 max_loss = row.get('Max Loss Streak', 'N/A')
                 mdd = row.get('Max DD %', 'N/A')
+                win_rate = row.get('Win Rate', 'N/A')
                 
                 body += f"{i}. **{strategy}** ({settings})\n"
-                body += f"   - 年化報酬: **{ann_ret}%**, Sharpe: **{sharpe}**\n"
+                body += f"   - 年化報酬: **{ann_ret}%**, Sharpe: **{sharpe}**, 勝率: {win_rate}%\n"
                 body += f"   - 平均持倉: {avg_hold} 天, MDD: {mdd}%\n"
                 body += f"   - 連勝/連敗: {max_win} / {max_loss}\n\n"
             
             body += "\n## Top 3 Strategies (Sharpe) - Limited Capital\n"
             top_sharpe = df.sort_values('Sharpe', ascending=False).head(3)
-            for _, row in top_sharpe.iterrows():
-                body += f"- **{row['Strategy']}** ({row['Settings']}): Sharpe {row['Sharpe']}, Ann. Return {row['Ann. Return %']}%\n"
+            for i, (_, row) in enumerate(top_sharpe.iterrows(), 1):
+                strategy = row['Strategy']
+                settings = row['Settings']
+                ann_ret = row['Ann. Return %']
+                sharpe = row['Sharpe']
+                avg_hold = row.get('Avg Holding Days', 'N/A')
+                max_win = row.get('Max Win Streak', 'N/A')
+                max_loss = row.get('Max Loss Streak', 'N/A')
+                mdd = row.get('Max DD %', 'N/A')
+                win_rate = row.get('Win Rate', 'N/A')
+                
+                body += f"{i}. **{strategy}** ({settings})\n"
+                body += f"   - Sharpe: **{sharpe}**, 年化報酬: **{ann_ret}%**, 勝率: {win_rate}%\n"
+                body += f"   - 平均持倉: {avg_hold} 天, MDD: {mdd}%\n"
+                body += f"   - 連勝/連敗: {max_win} / {max_loss}\n\n"
                 
         except Exception as e:
             body += f"\n⚠️ Error parsing backtest results: {e}\n"

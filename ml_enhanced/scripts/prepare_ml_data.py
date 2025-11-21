@@ -142,6 +142,12 @@ def main():
     
     # Convert to pandas for easier manipulation
     df_pd = df.to_pandas()
+    if 'volume' not in df_pd.columns:
+        logger.error("❌ volume column missing in pattern_analysis_result.csv. Regenerate it with run_historical_analysis.py.")
+        return
+    if df_pd['volume'].isna().all():
+        logger.error("❌ volume column is empty. Check data extraction before ML prep.")
+        return
     
     # Calculate technical indicators
     logger.info("Calculating technical indicators for all stocks...")

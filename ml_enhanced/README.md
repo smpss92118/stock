@@ -72,15 +72,23 @@ ml_enhanced/
 
 - **算法**: XGBoost Classifier
 - **目標**: 預測訊號是否為 "Winner" (未來 20 天漲幅 > 10%)
-- **特徵 (10 Features)**:
-    - **型態品質**: `pattern_quality` (A/B/C), `distance_to_buy`
-    - **技術指標**: `rsi_14`, `ma_trend`, `volatility`, `atr_ratio`
-    - **市場環境**: `market_trend`
+- **特徵 (24 Features)**:
+    - **型態品質 (3)**: `grade_numeric`, `distance_to_buy_pct`, `risk_pct`
+    - **成交量 (4)**: `volume_ratio_ma20`, `volume_ratio_ma50`, `volume_surge`, `volume_trend_5d`
+    - **動能 (4)**: `momentum_5d`, `momentum_20d`, `price_vs_ma20`, `price_vs_ma50`
+    - **RSI (2)**: `rsi_14`, `rsi_divergence`
+    - **技術面 (3)**: `ma_trend`, `volatility`, `atr_ratio`
+    - **市場環境 (2)**: `market_trend`, `market_volatility`
+    - **相對強弱 (1)**: `rs_rating`
+    - **型態專屬 (1)**: `consolidation_days`
+    - **訊號密度 (2, placeholder)**: `signal_count_ma10`, `signal_count_ma60`
 - **決策閾值**: Probability ≥ 0.4
 - **績效** (2025-11-21 更新):
     - ROC AUC: ~0.73
     - 準確率: ~75% (在 0.4 閉值下)
     - 回測驗證: CUP R=2.0 (ML 0.5) 年化 146.7%, Sharpe 3.13
+
+> 📘 **詳細特徵說明**: 查看 [ML 邏輯完整文檔](docs/ml_logic.md) 了解每個特徵的計算方式和來源
 
 ---
 
@@ -109,6 +117,7 @@ python stock/ml_enhanced/weekly_retrain.py
 2. **模型檔案**: `models/` 目錄下的 `.pkl` 檔案是自動生成的，請勿手動修改。
 3. **回滾**: 如果 ML 系統出現問題，原始的 `main.py` 掃描完全獨立，不受影響，可隨時切回原始報告。
 4. **績效更新**: 回測結果每週更新一次，平日報告使用上週日的數據。
+5. **Volume 必須存在**: `pattern_analysis_result.csv` 會帶出 `volume` 欄位供 ML 使用；若缺少 volume，`prepare_ml_data.py` 會直接中止並提示你先重新產生分析結果。
 
 ---
 

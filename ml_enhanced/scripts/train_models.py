@@ -42,16 +42,45 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), '../models')
 SELECTOR_MODEL_PATH = os.path.join(MODEL_DIR, 'stock_selector.pkl')
 SIZER_MODEL_PATH = os.path.join(MODEL_DIR, 'position_sizer.pkl')
 
-# Feature columns
+# Feature columns (24 features total - updated 2025-11-21)
 FEATURE_COLS = [
+    # Pattern quality (3)
     'grade_numeric',
     'distance_to_buy_pct',
     'risk_pct',
-    'rsi_14',
+    
+    # Volume indicators (4) - NEW
+    'volume_ratio_ma20',
+    'volume_ratio_ma50',
+    'volume_surge',
+    'volume_trend_5d',
+    
+    # Momentum indicators (4) - NEW
+    'momentum_5d',
+    'momentum_20d',
+    'price_vs_ma20',
+    'price_vs_ma50',
+    
+    # RSI features (2)
+    'rsi_14',              # UPDATED: now real RSI (was placeholder=50)
+    'rsi_divergence',      # NEW
+    
+    # Technical indicators (3)
     'ma_trend',
     'volatility',
     'atr_ratio',
-    'market_trend',
+    
+    # Market environment (2)
+    'market_trend',        # UPDATED: now real market trend (was placeholder=1)
+    'market_volatility',   # NEW
+    
+    # Relative strength (1) - NEW
+    'rs_rating',
+    
+    # Pattern specific (1) - NEW
+    'consolidation_days',
+    
+    # Signal counts (2) - placeholder for future implementation
     'signal_count_ma10',
     'signal_count_ma60'
 ]

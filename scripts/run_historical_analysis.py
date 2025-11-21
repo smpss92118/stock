@@ -143,6 +143,7 @@ def process_single_stock(args):
         # === 使用預先提取的 array 值 ===
         results.append({
             'sid': sid,
+            'volume': volumes_arr[i],
             'date': date_today,
             'dd': dd,
             'high': high_today,

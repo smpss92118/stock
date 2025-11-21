@@ -52,6 +52,7 @@ def load_ml_model():
             model = pickle.load(f)
         with open(FEATURE_INFO_PATH, 'rb') as f:
             feature_info = pickle.load(f)
+        logger.info(f"ML 模型載入完成，特徵數: {len(feature_info.get('feature_cols', []))}")
         return model, feature_info['feature_cols']
     except Exception as e:
         logger.error(f"⚠️ ML 模型載入失敗: {e}")
@@ -176,6 +177,9 @@ def scan_with_ml(df, model, feature_cols):
                 'rs_rating': round(rs_rating, 1)
             })
     
+    total_signals = len(signals)
+    ml_kept = sum(1 for s in signals if s['ml_selected'])
+    logger.info(f"掃描完成: 總訊號 {total_signals}, ML≥0.4 {ml_kept}, 處理股票 {processed}")
     return signals, latest_date
 
 def generate_ml_report(signals, scan_date, df_full=None):
@@ -375,9 +379,28 @@ def generate_ml_report(signals, scan_date, df_full=None):
                 max_win = row.get('Max Win Streak', 'N/A')
                 max_loss = row.get('Max Loss Streak', 'N/A')
                 mdd = row.get('Max DD %', 'N/A')
+                win_rate = row.get('Win Rate', 'N/A')
                 
                 f.write(f"{i}. **{strategy_name}**\n")
-                f.write(f"   - 年化報酬: **{ann_ret}%**, Sharpe: **{sharpe}**\n")
+                f.write(f"   - 年化報酬: **{ann_ret}%**, Sharpe: **{sharpe}**, 勝率: {win_rate}%\n")
+                f.write(f"   - 平均持倉: {avg_hold} 天, MDD: {mdd}%\n")
+                f.write(f"   - 連勝/連敗: {max_win} / {max_loss}\n\n")
+
+            # Sort by Sharpe
+            top_sharpe = backtest_df.sort_values('Sharpe', ascending=False).head(3)
+            f.write("### 依 Sharpe 排序\n\n")
+            for i, (_, row) in enumerate(top_sharpe.iterrows(), 1):
+                strategy_name = row['Strategy']
+                ann_ret = row['Ann. Return %']
+                sharpe = row['Sharpe']
+                avg_hold = row.get('Avg Holding Days', 'N/A')
+                max_win = row.get('Max Win Streak', 'N/A')
+                max_loss = row.get('Max Loss Streak', 'N/A')
+                mdd = row.get('Max DD %', 'N/A')
+                win_rate = row.get('Win Rate', 'N/A')
+                
+                f.write(f"{i}. **{strategy_name}**\n")
+                f.write(f"   - Sharpe: **{sharpe}**, 年化報酬: **{ann_ret}%**, 勝率: {win_rate}%\n")
                 f.write(f"   - 平均持倉: {avg_hold} 天, MDD: {mdd}%\n")
                 f.write(f"   - 連勝/連敗: {max_win} / {max_loss}\n\n")
             
@@ -442,6 +465,9 @@ def main():
     # 2. 載入 ML 模型
     logger.info("\n>>> 載入 ML 模型...")
     model, feature_cols = load_ml_model()
+    if model is None or feature_cols is None:
+        logger.error("❌ 模型或特徵列表載入失敗，停止流程。")
+        return
     
     # 3. 載入數據
     logger.info("\n>>> 載入股票數據...")
@@ -450,6 +476,7 @@ def main():
         logger.error("❌ 數據載入失敗")
         return
     df, latest_date = result
+    logger.info(f"數據載入完成: {len(df)} 筆，股票 {df['sid'].nunique()} 檔，最新日期 {latest_date}")
     
     # 4. 掃描並評分
     logger.info("\n>>> 掃描股票訊號...")
