@@ -528,18 +528,12 @@ def generate_recommendation_report(signals_df, backtest_df):
     """
     logger.info("生成推薦報告...")
 
-    if signals_df is None or signals_df.empty:
-        logger.info("  無訊號，跳過詳細報告")
-        return
-
+    # 即使無訊號也生成報告
     try:
         output_dir = RESULTS_DIR
         os.makedirs(output_dir, exist_ok=True)
 
         today_str = date.today().strftime('%Y-%m-%d')
-
-        # 篩選推薦的訊號 (A/B 級)
-        recommended = signals_df[signals_df['pred_label'] >= 2].copy()
 
         # 生成 Markdown 報告
         report = f"""# CatBoost Enhanced 股票訊號報告
@@ -550,96 +544,101 @@ def generate_recommendation_report(signals_df, backtest_df):
 
 ## 📊 本日訊號統計
 
-- **總訊號數**: {len(signals_df)}
-
 """
 
-        if len(signals_df) == 0:
-            report += "**本日無符合條件的型態訊號。**\n"
-
+        if signals_df is None or signals_df.empty:
+            report += "- **總訊號數**: 0\n\n"
+            report += "**本日無符合條件的型態訊號。**\n\n"
+        else:
+            report += f"- **總訊號數**: {len(signals_df)}\n\n"
+        
         report += "\n---\n\n"
 
-        # 本日推薦清單 (只顯示還沒突破的訊號)
-        report += "## 📋 本日推薦清單 (A/B 級、未突破)\n\n"
+        # 本日推薦清單 (只在有訊號時顯示)
+        if signals_df is not None and not signals_df.empty:
+            # 篩選推薦的訊號 (A/B 級)
+            recommended = signals_df[signals_df['pred_label'] >= 2].copy()
+            
+            report += "## 📋 本日推薦清單 (A/B 級、未突破)\n\n"
 
-        # 篩選: 推薦等級 (A/B) + 狀態為"等待突破"
-        recommended_not_broken = recommended[recommended['status'] == '等待突破'].copy()
+            # 篩選: 推薦等級 (A/B) + 狀態為"等待突破"
+            recommended_not_broken = recommended[recommended['status'] == '等待突破'].copy()
 
-        if len(recommended_not_broken) == 0:
-            report += "本日無符合條件的推薦訊號 (未突破)。\n"
-        else:
-            # 按距離% 排序 (優先顯示離買入價近的)
-            recommended_sorted = recommended_not_broken.sort_values('distance_pct')
+            if len(recommended_not_broken) == 0:
+                report += "本日無符合條件的推薦訊號 (未突破)。\n"
+            else:
+                # 按距離% 排序 (優先顯示離買入價近的)
+                recommended_sorted = recommended_not_broken.sort_values('distance_pct')
 
-            # 按等級顯示
-            for grade in ['A', 'B']:
-                grade_signals = recommended_sorted[recommended_sorted['pred_grade'] == grade].copy()
-                if len(grade_signals) == 0:
-                    continue
+                # 按等級顯示
+                for grade in ['A', 'B']:
+                    grade_signals = recommended_sorted[recommended_sorted['pred_grade'] == grade].copy()
+                    if len(grade_signals) == 0:
+                        continue
 
-                report += f"### {grade} 級推薦 ({len(grade_signals)} 個)\n\n"
+                    report += f"### {grade} 級推薦 ({len(grade_signals)} 個)\n\n"
 
-                # 表格頭
-                report += "| 代碼 | Pattern | 當前價 | 買入價 | 停損價 | 距離% | 狀態 | 年化報酬 | 勝率 | Sharpe | MDD | 連勝 | 連敗 |\n"
-                report += "|------|---------|--------|--------|--------|-------|------|---------|------|--------|-----|-------|-------|\n"
+                    # 表格頭
+                    report += "| 代碼 | Pattern | 當前價 | 買入價 | 停損價 | 距離% | 狀態 | 年化報酬 | 勝率 | Sharpe | MDD | 連勝 | 連敗 |\n"
+                    report += "|------|---------|--------|--------|--------|-------|------|---------|------|--------|-----|-------|-------|\n"
 
-                for _, row in grade_signals.head(50).iterrows():  # 限制每級最多 50 個
-                    sid = str(row['sid']) if 'sid' in row and pd.notna(row['sid']) else 'N/A'
-                    pattern = str(row.get('pattern_type', 'N/A')).upper()
-                    current = float(row.get('current_price', 0))
-                    buy = float(row.get('buy_price', 0))
-                    stop = float(row.get('stop_price', 0))
-                    dist = float(row.get('distance_pct', 0))
-                    status = str(row.get('status', 'N/A'))
+                    for _, row in grade_signals.head(50).iterrows():  # 限制每級最多 50 個
+                        sid = str(row['sid']) if 'sid' in row and pd.notna(row['sid']) else 'N/A'
+                        pattern = str(row.get('pattern_type', 'N/A')).upper()
+                        current = float(row.get('current_price', 0))
+                        buy = float(row.get('buy_price', 0))
+                        stop = float(row.get('stop_price', 0))
+                        dist = float(row.get('distance_pct', 0))
+                        status = str(row.get('status', 'N/A'))
 
-                    line = f"| {sid} | {pattern} | {current:.2f} | {buy:.2f} | {stop:.2f} | {dist:.1f}% | {status}"
+                        line = f"| {sid} | {pattern} | {current:.2f} | {buy:.2f} | {stop:.2f} | {dist:.1f}% | {status}"
 
-                    # 年化報酬
-                    if 'Ann. Return %' in row and pd.notna(row['Ann. Return %']):
-                        ret = float(row['Ann. Return %'])
-                        line += f" | {ret:.1f}%"
-                    else:
-                        line += " | N/A"
+                        # 年化報酬
+                        if 'Ann. Return %' in row and pd.notna(row['Ann. Return %']):
+                            ret = float(row['Ann. Return %'])
+                            line += f" | {ret:.1f}%"
+                        else:
+                            line += " | N/A"
 
-                    # 勝率
-                    if 'Win Rate' in row and pd.notna(row['Win Rate']):
-                        win = float(row['Win Rate'])
-                        line += f" | {win:.1f}%"
-                    else:
-                        line += " | N/A"
+                        # 勝率
+                        if 'Win Rate' in row and pd.notna(row['Win Rate']):
+                            win = float(row['Win Rate'])
+                            line += f" | {win:.1f}%"
+                        else:
+                            line += " | N/A"
 
-                    # Sharpe
-                    if 'Sharpe' in row and pd.notna(row['Sharpe']):
-                        sharpe = float(row['Sharpe'])
-                        line += f" | {sharpe:.2f}"
-                    else:
-                        line += " | N/A"
+                        # Sharpe
+                        if 'Sharpe' in row and pd.notna(row['Sharpe']):
+                            sharpe = float(row['Sharpe'])
+                            line += f" | {sharpe:.2f}"
+                        else:
+                            line += " | N/A"
 
-                    # Max Drawdown
-                    if 'Max Drawdown %' in row and pd.notna(row['Max Drawdown %']):
-                        mdd = float(row['Max Drawdown %'])
-                        line += f" | {mdd:.1f}%"
-                    else:
-                        line += " | N/A"
+                        # Max Drawdown
+                        if 'Max Drawdown %' in row and pd.notna(row['Max Drawdown %']):
+                            mdd = float(row['Max Drawdown %'])
+                            line += f" | {mdd:.1f}%"
+                        else:
+                            line += " | N/A"
 
-                    # 連勝次數
-                    if 'Max Win Streak' in row and pd.notna(row['Max Win Streak']):
-                        wins = int(row['Max Win Streak'])
-                        line += f" | {wins}"
-                    else:
-                        line += " | N/A"
+                        # 連勝次數
+                        if 'Max Win Streak' in row and pd.notna(row['Max Win Streak']):
+                            wins = int(row['Max Win Streak'])
+                            line += f" | {wins}"
+                        else:
+                            line += " | N/A"
 
-                    # 連敗次數
-                    if 'Max Loss Streak' in row and pd.notna(row['Max Loss Streak']):
-                        losses = int(row['Max Loss Streak'])
-                        line += f" | {losses}"
-                    else:
-                        line += " | N/A"
+                        # 連敗次數
+                        if 'Max Loss Streak' in row and pd.notna(row['Max Loss Streak']):
+                            losses = int(row['Max Loss Streak'])
+                            line += f" | {losses}"
+                        else:
+                            line += " | N/A"
 
-                    line += " |"
-                    report += line + "\n"
+                        line += " |"
+                        report += line + "\n"
 
-                report += "\n"
+                    report += "\n"
 
         report += "---\n\n"
 
@@ -713,10 +712,10 @@ def generate_recommendation_report(signals_df, backtest_df):
         # Top 3 策略
         report += "## 🏆 Top 3 Strategies (CatBoost Enhanced)\n\n"
 
-        report += "### 策略分級說明\n\n"
-        report += "- **A 級**: CatBoost 模型預測信心度最高的訊號\n"
-        report += "- **B 級**: CatBoost 模型預測信心度次高的訊號\n"
-        report += "- 歷史績效數據來自回測，代表該策略組合 (Pattern + Exit Mode) 的平均表現\n\n"
+        report += "> **說明**：以下績效為 CatBoost 模型過濾後的回測結果\n"
+        report += "> - 只使用 **A/B 級訊號**（模型預測信心度高的訊號）\n"
+        report += "> - 策略名稱 = Pattern (HTF/CUP/VCP) + Exit Mode (fixed_r2_t20 等)\n"
+        report += "> - 績效指標代表該策略組合的歷史平均表現\n\n"
 
         strategies_by_return = get_top_strategies(backtest_df, n=3)
         if strategies_by_return:
@@ -752,14 +751,20 @@ def generate_recommendation_report(signals_df, backtest_df):
 
         # 同時保存推薦訊號的 CSV (用於後續載入一週清單)
         csv_file = output_dir / f'daily_scan_{today_str}.csv'
-        if len(recommended) > 0:
-            cols = ['sid', 'pattern_type', 'exit_mode', 'pred_grade', 'pred_proba_A', 'pred_proba_B']
-            if 'Ann. Return %' in recommended.columns:
-                cols.append('Ann. Return %')
-            if 'Win Rate' in recommended.columns:
-                cols.append('Win Rate')
-            available_cols = [c for c in cols if c in recommended.columns]
-            recommended[available_cols].to_csv(csv_file, index=False, encoding='utf-8-sig')
+        if signals_df is not None and not signals_df.empty:
+            # 篩選推薦訊號 (A/B 級)
+            recommended = signals_df[signals_df['pred_label'] >= 2]
+            if len(recommended) > 0:
+                cols = ['sid', 'pattern_type', 'exit_mode', 'pred_grade', 'pred_proba_A', 'pred_proba_B']
+                if 'Ann. Return %' in recommended.columns:
+                    cols.append('Ann. Return %')
+                if 'Win Rate' in recommended.columns:
+                    cols.append('Win Rate')
+                available_cols = [c for c in cols if c in recommended.columns]
+                recommended[available_cols].to_csv(csv_file, index=False, encoding='utf-8-sig')
+            else:
+                # 空推薦也要保存
+                pd.DataFrame().to_csv(csv_file, index=False, encoding='utf-8-sig')
         else:
             # 空推薦也要保存（用於載入一週清單時的計數）
             pd.DataFrame().to_csv(csv_file, index=False, encoding='utf-8-sig')
@@ -770,8 +775,12 @@ def generate_recommendation_report(signals_df, backtest_df):
         logger.info("\n" + "="*80)
         logger.info("【今日掃描完成】")
         logger.info("="*80)
-        logger.info(f"總訊號數: {len(signals_df)}")
-        logger.info(f"推薦訊號: {len(recommended)}")
+        if signals_df is not None and not signals_df.empty:
+            recommended_count = len(signals_df[signals_df['pred_label'] >= 2])
+            logger.info(f"總訊號數: {len(signals_df)}")
+            logger.info(f"推薦訊號: {recommended_count}")
+        else:
+            logger.info("總訊號數: 0")
         logger.info(f"報告: {report_file}")
         logger.info("="*80)
 
@@ -868,27 +877,30 @@ def main():
 
     # 2. 載入今日訊號
     signals_df = get_today_signals()
-    if signals_df is None or signals_df.empty:
-        logger.warning("⚠️ 無法載入訊號或今日無訊號")
-        return
+    
+    # 如果有訊號，進行預測和特徵處理
+    if signals_df is not None and not signals_df.empty:
+        # 3. 準備特徵
+        signals_df = prepare_features_for_model(signals_df)
+        if signals_df is None:
+            logger.error("❌ 特徵準備失敗")
+            signals_df = pd.DataFrame()  # 設為空，繼續生成報告
 
-    # 3. 準備特徵
-    signals_df = prepare_features_for_model(signals_df)
-    if signals_df is None:
-        logger.error("❌ 特徵準備失敗")
-        return
+        # 4. 預測品質
+        if signals_df is not None and not signals_df.empty:
+            signals_df = predict_signal_quality(model, feature_info, signals_df)
+            if signals_df is None:
+                logger.error("❌ 預測失敗")
+                signals_df = pd.DataFrame()
 
-    # 4. 預測品質
-    signals_df = predict_signal_quality(model, feature_info, signals_df)
-    if signals_df is None:
-        logger.error("❌ 預測失敗")
-        return
+        # 5. 添加 backtest 性能
+        if signals_df is not None and not signals_df.empty and backtest_df is not None:
+            signals_df = enrich_with_backtest_performance(signals_df, backtest_df)
+    else:
+        logger.info("今日無訊號，僅生成 Top Strategies 報告")
+        signals_df = pd.DataFrame()  # 空的 DataFrame
 
-    # 5. 添加 backtest 性能
-    if backtest_df is not None:
-        signals_df = enrich_with_backtest_performance(signals_df, backtest_df)
-
-    # 6. 生成報告 (傳入 backtest_df 用於 Top 策略統計)
+    # 6. 生成報告 (即使無訊號也生成，包含 Top 策略統計)
     generate_recommendation_report(signals_df, backtest_df)
 
     logger.info("\n" + "="*80)
