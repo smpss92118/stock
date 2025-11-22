@@ -1,6 +1,6 @@
-# 專案邏輯與架構說明 (`logic.md`)
+# 系統架構與流程總覽
 
-本文檔旨在詳細闡述此股票分析與交易訊號產生系統的核心架構、主要工作流程及關鍵邏輯。
+本文檔說明此股票分析與交易訊號產生系統的核心架構、主要工作流程及關鍵邏輯。
 
 ## 1. 專案概觀
 
@@ -67,7 +67,7 @@
         2. 基於這個包含所有歷史訊號的檔案，引擎可以快速測試各種不同的**出場策略**（如停損、停利）和**資金管理模型**。
         3. 由於最耗時的圖形掃描已經完成，這個階段可以非常快速地平行運行數百種場景，並產出詳細的績效報告，如 `data/processed/backtest_report_v2.md`。
 
-> 關於回測引擎的更詳細設計，請參考：[回測引擎設計文檔](./docs/backtest_engine_logic.md)
+> 關於回測引擎的更詳細設計，請參考：[回測引擎設計文檔](./backtest_engine.md)
 
 ### 3.4 參數優化
 
@@ -77,7 +77,7 @@
     - 其目標是找到能產出最佳歷史回測績效的參數組合。
     - 優化結果存放於 `optimization/results/` 中。
 
-> 更多細節請見：[超參數優化說明](./docs/hyperparameter_optimization.md)
+> 更多細節請見：[超參數優化說明](./optimization/hyperparameter_guide.md)
 
 ### 3.5 機器學習增強
 
@@ -103,13 +103,13 @@
 - vs 原始 CUP R=2.0 (無 ML): 年化 152.5%, Sharpe 2.31, 勝率 56.7%
 - **結論**: ML 過濾提升勝率 +18%，Sharpe Ratio +35%，適合追求穩健報酬的投資人
 
-> 關於機器學習模型的邏輯，請參考：[ML 邏輯說明](./ml_enhanced/docs/ml_logic.md)
+> 關於機器學習模型的邏輯，請參考：[ML 邏輯說明](./ml/system_logic.md)
 
 ## 4. 目錄結構說明
 
 - `data/`: 存放所有資料，`raw` 為原始資料，`processed` 為處理後的報告或分析結果。
-- `docs/`: 存放專案的設計文檔和分析報告。
-- `ml_enhanced/`: 包含所有機器學習相關的代碼、模型和報告。
+- `docs/`: 專案文檔與報告（含 ML/優化子目錄，詳見 `docs/README.md`）。
+- `ml_enhanced/`: 包含所有機器學習相關的代碼、模型和報告輸出。
 - `optimization/`: 策略參數優化相關的腳本和結果。
 - `scripts/`: 執行主要工作流程（數據更新、掃描、回測）的頂層腳本。
 - `src/`: 專案的核心源代碼。
@@ -123,8 +123,8 @@
 
 為了更深入地了解特定主題，您可以參考以下文件：
 
-- **策略邏輯**: [圖形邏輯說明](./docs/pattern_logic.md)
-- **回測引擎**: [回測引擎設計文檔](./docs/backtest_engine_logic.md)
-- **參數優化**: [超參數優化說明](./docs/hyperparameter_optimization.md)
-- **ML 整合**: [ML 邏輯說明](./ml_enhanced/docs/ml_logic.md)
-- **專案讀我**: [README.md](./README.md)
+- **策略邏輯**: [圖形邏輯說明](./strategy_patterns.md)
+- **回測引擎**: [回測引擎設計文檔](./backtest_engine.md)
+- **參數優化**: [超參數優化說明](./optimization/hyperparameter_guide.md)
+- **ML 整合**: [ML 邏輯說明](./ml/system_logic.md)
+- **專案讀我**: [README.md](../README.md)

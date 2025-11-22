@@ -46,15 +46,24 @@ stock/
 │   ├── data/                  # ML 訓練數據
 │   ├── daily_reports/         # 每日 ML 報告
 │   ├── results/               # 回測結果
-│   ├── README.md              # ML 系統說明
-│   └── CRONTAB_SETUP.md       # 自動化設定
+│   └── docs/                  #（文檔集中於 docs/ml/）
 ├── optimization/              # 超參數優化 (Historical)
 │   └── optimize_hyperparameters.py
 ├── data/                      # 數據存放
 │   ├── raw/daily_quotes/      # 每日股價
 │   └── processed/             # 處理後數據
 ├── daily_tracking_stock/      # 每日原始報告
-├── docs/                      # 文檔
+├── docs/                      # 文檔（索引見 docs/README.md）
+│   ├── system_overview.md
+│   ├── operations.md
+│   ├── strategy_patterns.md
+│   ├── backtest_engine.md
+│   ├── ml/
+│   │   ├── overview.md
+│   │   └── system_logic.md
+│   └── optimization/
+│       ├── hyperparameter_guide.md
+│       └── change_log.md
 └── archive/                   # 已棄用文件
 ```
 
@@ -79,13 +88,13 @@ stock/
 0 2 * * 0 /Users/sony/ml_stock/stock/.venv/bin/python /Users/sony/ml_stock/stock/ml_enhanced/weekly_retrain.py >> /Users/sony/ml_stock/logs/ml_retrain.log 2>&1
 ```
 
-詳細設定請見 [`ml_enhanced/CRONTAB_SETUP.md`](ml_enhanced/CRONTAB_SETUP.md)
+詳細設定請見 `docs/operations.md`
 
 ---
 
 ## 📊 每日輸出報告
 
-###1. 原始策略報告
+### 1. 原始策略報告
 **位置**: `stock/daily_tracking_stock/YYYY-MM-DD/daily_summary.md`
 
 **內容**:
@@ -162,7 +171,7 @@ stock/.venv/bin/python stock/ml_enhanced/weekly_retrain.py
 
 ### ML 模型
 - **算法**: XGBoost Classifier
-- **特徵**: 型態品質、技術指標、市場趨勢 (10 features)
+- **特徵**: 24 項（型態品質、成交量、動能、RSI、趨勢/波動、市場環境、RS、型態專屬、訊號密度）
 - **訓練**: 14,033 樣本 (時間序列分割)
 - **性能**: ROC AUC 0.73, Threshold 0.4
 
@@ -179,17 +188,20 @@ stock/.venv/bin/python stock/ml_enhanced/weekly_retrain.py
 
 ## 📖 文檔
 
-- **[回測引擎完整邏輯](docs/backtest_engine_logic.md)** - 詳細說明策略獨立性、進出場規則、資金管理 ⭐
-- [`ml_enhanced/README.md`](ml_enhanced/README.md) - ML 系統詳細說明
-- [`ml_enhanced/CRONTAB_SETUP.md`](ml_enhanced/CRONTAB_SETUP.md) - 自動化設定
-- [`docs/pattern_logic.md`](docs/pattern_logic.md) - 型態定義細節
-- [`docs/optimization_vs_baseline.md`](docs/optimization_vs_baseline.md) - 優化歷史
+- `docs/README.md` - 文檔索引
+- `docs/system_overview.md` - 系統架構與流程
+- `docs/operations.md` - 排程與手動執行
+- `docs/strategy_patterns.md` - 型態定義細節
+- `docs/backtest_engine.md` - 回測引擎邏輯 ⭐
+- `docs/ml/overview.md` / `docs/ml/system_logic.md` - ML 系統與特徵說明
+- `docs/optimization/hyperparameter_guide.md` / `docs/optimization/change_log.md` - 策略優化指南與紀錄
+- （產出報告，未重構）`docs/backtest_report_v2.md`, `docs/optimization_vs_baseline.md`
 
 ---
 
 ## 🛠️ 系統需求
 
-- Python 3.8+
+- Python 3.11+
 - Poetry (依賴管理)
 - Pandas, NumPy, Polars
 - XGBoost, scikit-learn

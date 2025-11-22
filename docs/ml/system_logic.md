@@ -2,7 +2,7 @@
 
 **文檔版本**: 1.0  
 **最後更新**: 2025-11-21  
-**關聯**: [ML Enhanced README](../README.md)
+**關聯**: [ML Overview](./overview.md)
 
 ---
 
@@ -48,6 +48,7 @@ ml_enhanced/
 ├── daily_ml_scanner.py          # 每日 ML 掃描器
 └── weekly_retrain.py            # 每週模型再訓練
 ```
+> 文檔搬遷至 `docs/ml/`，程式與報告仍位於 `ml_enhanced/`。
 
 ---
 
@@ -461,12 +462,12 @@ for sid in latest_stocks:
 
 ## 參考連結
 
-- [ML Enhanced README](../README.md)
+- [ML Overview](./overview.md)
 - [Feature Extraction Code](../../src/ml/features.py)
 - [Model Training Code](../scripts/train_models.py)
 - [Data Preparation Code](../scripts/prepare_ml_data.py)
 - [Pattern Detection Strategies](../../src/strategies/)
-- [Backtest Engine Logic](../../docs/backtest_engine_logic.md)
+- [Backtest Engine Logic](../backtest_engine.md)
 
 ---
 
