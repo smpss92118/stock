@@ -11,47 +11,74 @@ import pandas as pd
 from datetime import datetime, date
 
 # --- Configuration ---
+# --- Configuration ---
 INITIAL_CAPITAL = 1_000_000
 MAX_POSITIONS = 10
 POSITION_SIZE_PCT = 0.10
 RISK_FREE_RATE = 0.02
+FEE_RATE = 0.001425  # Discounted fee? User said 0.1% (0.001). Let's stick to user request 0.001
+FEE_RATE = 0.001
+TAX_RATE = 0.003
+
+def get_tick_size(price):
+    """
+    Get tick size based on price range (TW Stock Exchange rules).
+    """
+    if price < 10:
+        return 0.01
+    elif price < 50:
+        return 0.05
+    elif price < 100:
+        return 0.1
+    elif price < 500:
+        return 0.5
+    elif price < 1000:
+        return 1.0
+    else:
+        return 5.0
+
+def calculate_net_pnl(buy_price, sell_price, shares=1000):
+    """
+    Calculate Net PnL % considering Slippage, Fee, and Tax.
+    Slippage is applied to the prices BEFORE passing to this function? 
+    No, let's apply slippage inside the simulation logic.
+    Here we just do the fee/tax math.
+    
+    Net PnL % = (Net Proceeds - Total Cost) / Total Cost
+    Total Cost = Buy Price * (1 + Fee)
+    Net Proceeds = Sell Price * (1 - Fee - Tax)
+    """
+    cost = buy_price * (1 + FEE_RATE)
+    proceeds = sell_price * (1 - FEE_RATE - TAX_RATE)
+    return (proceeds - cost) / cost
 
 def simulate_exit_fixed(high_np, low_np, close_np, date_list, entry_idx, buy_price, stop_price, r_mult=2.0, time_exit=20):
     """
     Simulate a trade exit with Fixed Target (R-multiple) and Time Stop.
-    
-    Args:
-        high_np, low_np, close_np: Price arrays (full history or slice starting from entry)
-        date_list: Date list corresponding to arrays
-        entry_idx: Index of ENTRY day in the arrays
-        buy_price: Entry Price
-        stop_price: Initial Stop Price
-        r_mult: Target R-multiple (Target = Buy + R * Risk)
-        time_exit: Max holding days
-        
-    Returns:
-        dict: {entry_date, exit_date, pnl, duration} or None if data error
+    Includes Slippage (1 tick) and Transaction Costs.
     """
-    risk = buy_price - stop_price
+    # 1. Apply Slippage to Entry
+    entry_tick = get_tick_size(buy_price)
+    real_buy_price = buy_price + entry_tick # Buy higher
+    
+    # Adjust Stop/Target based on REAL buy price? 
+    # Usually stop is based on technical level. 
+    # If we buy higher, risk increases.
+    # Let's assume Stop Price is fixed technical level.
+    
+    risk = real_buy_price - stop_price
     if risk <= 0: return None
     
-    target = buy_price + risk * r_mult
+    target = real_buy_price + risk * r_mult
     
     # Define path slice
     path_len = len(high_np)
     end_idx = min(entry_idx + time_exit, path_len)
     
-    # Slice arrays for the holding period
-    # Note: We start checking from entry_idx (same day close?) or entry_idx + 1?
-    # Usually we assume entry happens during the day. Exit checks start SAME day (intraday) or NEXT day?
-    # run_backtest.py checks from entry_abs (which is the day of entry).
-    # If we enter on a limit order, we might hit stop/target same day.
-    
     path_high = high_np[entry_idx:end_idx]
     path_low = low_np[entry_idx:end_idx]
     
     # Check hits
-    # We need to find the FIRST occurrence
     stop_hits = np.where(path_low <= stop_price)[0]
     target_hits = np.where(path_high >= target)[0]
     
@@ -59,22 +86,97 @@ def simulate_exit_fixed(high_np, low_np, close_np, date_list, entry_idx, buy_pri
     target_i = target_hits[0] if target_hits.size > 0 else np.inf
     
     exit_rel_idx = -1
-    pnl = 0.0
+    raw_exit_price = 0.0
     
     if np.isinf(stop_i) and np.isinf(target_i):
         # Time Exit
         exit_rel_idx = (end_idx - entry_idx) - 1
-        exit_price = close_np[entry_idx + exit_rel_idx]
-        pnl = (exit_price - buy_price) / buy_price
+        raw_exit_price = close_np[entry_idx + exit_rel_idx]
     elif stop_i < target_i:
         # Stop Hit
         exit_rel_idx = int(stop_i)
-        pnl = (stop_price - buy_price) / buy_price
+        raw_exit_price = stop_price # Assume filled at stop price (worst case gap handled by low?)
+        # If low is much lower than stop, we might fill lower. 
+        # For simplicity, use stop price, but apply slippage.
     else:
         # Target Hit
         exit_rel_idx = int(target_i)
-        pnl = (target - buy_price) / buy_price
+        raw_exit_price = target
         
+    # 2. Apply Slippage to Exit
+    exit_tick = get_tick_size(raw_exit_price)
+    real_exit_price = raw_exit_price - exit_tick # Sell lower
+    
+    # 3. Calculate Net PnL
+    pnl = calculate_net_pnl(real_buy_price, real_exit_price)
+    
+    exit_abs_idx = entry_idx + exit_rel_idx
+    
+    return {
+        'entry_date': date_list[entry_idx],
+        'exit_date': date_list[exit_abs_idx],
+        'pnl': pnl,
+        'duration': exit_rel_idx
+    }
+
+def simulate_exit_trailing(high_np, low_np, close_np, ma_np, date_list, entry_idx, buy_price, stop_price, trigger_r=1.5, trail_ma_type='ma20'):
+    """
+    Simulate a trade exit with Dynamic Trailing Stop.
+    Includes Slippage (1 tick) and Transaction Costs.
+    """
+    # 1. Apply Slippage to Entry
+    entry_tick = get_tick_size(buy_price)
+    real_buy_price = buy_price + entry_tick
+    
+    risk = real_buy_price - stop_price
+    if risk <= 0: return None
+    
+    trigger_price = real_buy_price + risk * trigger_r
+    current_stop = stop_price
+    trailing_active = False
+    
+    path_high = high_np[entry_idx:]
+    path_low = low_np[entry_idx:]
+    path_close = close_np[entry_idx:]
+    path_ma = ma_np[entry_idx:]
+    
+    exit_rel_idx = -1
+    raw_exit_price = 0.0
+    exit_found = False
+    
+    for k in range(len(path_high)):
+        h = path_high[k]
+        l = path_low[k]
+        m = path_ma[k]
+        
+        # 1. Check Stop Hit
+        if l <= current_stop:
+            raw_exit_price = current_stop
+            exit_rel_idx = k
+            exit_found = True
+            break
+        
+        # 2. Check Trigger
+        if not trailing_active and h >= trigger_price:
+            trailing_active = True
+            current_stop = real_buy_price # Breakeven
+        
+        # 3. Update Trail
+        if trailing_active:
+            if not np.isnan(m):
+                current_stop = max(current_stop, m)
+                
+    if not exit_found:
+        exit_rel_idx = len(path_high) - 1
+        raw_exit_price = path_close[-1]
+        
+    # 2. Apply Slippage to Exit
+    exit_tick = get_tick_size(raw_exit_price)
+    real_exit_price = raw_exit_price - exit_tick
+    
+    # 3. Calculate Net PnL
+    pnl = calculate_net_pnl(real_buy_price, real_exit_price)
+    
     exit_abs_idx = entry_idx + exit_rel_idx
     
     return {

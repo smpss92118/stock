@@ -55,6 +55,23 @@ def load_data_polars():
     logger.debug(f"Loaded {df.shape[0]:,} rows, {len(df.columns)} columns")
     return df
 
+# --- Helpers for Costs & Slippage ---
+FEE_RATE = 0.001
+TAX_RATE = 0.003
+
+def get_tick_size(price):
+    if price < 10: return 0.01
+    elif price < 50: return 0.05
+    elif price < 100: return 0.1
+    elif price < 500: return 0.5
+    elif price < 1000: return 1.0
+    else: return 5.0
+
+def calculate_net_pnl(buy_price, sell_price):
+    cost = buy_price * (1 + FEE_RATE)
+    proceeds = sell_price * (1 - FEE_RATE - TAX_RATE)
+    return (proceeds - cost) / cost
+
 # --- Core Engine: Trade Extractor ---
 # 負責計算「每一筆」符合訊號的交易的進出場時間與損益，不考慮資金限制
 def generate_trade_candidates(df, strategy, exit_mode, params):
@@ -108,7 +125,12 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
         for sig in sigs_df.to_dicts():
             buy = sig[buy_col]
             stop = sig[stop_col]
-            risk = buy - stop
+            
+            # 1. Apply Slippage to Entry
+            entry_tick = get_tick_size(buy)
+            real_buy = buy + entry_tick
+            
+            risk = real_buy - stop
             if risk <= 0: continue
                 
             # Find signal index
@@ -128,7 +150,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
             future_high = high_np[sig_idx + 1 : future_end]
             if len(future_high) == 0: continue
             
-            entry_candidates_idx = np.where(future_high >= buy)[0]
+            entry_candidates_idx = np.where(future_high >= real_buy)[0]
             if entry_candidates_idx.size == 0: continue
             
             entry_rel = entry_candidates_idx[0]
@@ -138,12 +160,13 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
             # 2. Exit Logic
             pnl = 0.0
             exit_abs = -1
+            raw_exit_price = 0.0
             
             # --- Logic A: Fixed Target / Time ---
             if exit_mode == 'fixed':
                 r_mult = params['r_mult']
                 time_exit = params['time_exit']
-                target = buy + risk * r_mult
+                target = real_buy + risk * r_mult
                 
                 path_end = len(high_np)
                 if time_exit is not None:
@@ -151,6 +174,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                 
                 path_high = high_np[entry_abs:path_end]
                 path_low = low_np[entry_abs:path_end]
+                path_close = close_np[entry_abs:path_end]
                 
                 # Check hits
                 stop_hits = np.where(path_low <= stop)[0]
@@ -162,17 +186,17 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                 if np.isinf(stop_i) and np.isinf(target_i):
                     # Time exit
                     exit_abs = path_end - 1
-                    pnl = (close_np[exit_abs] - buy) / buy
+                    raw_exit_price = path_close[-1]
                 elif stop_i < target_i:
                     exit_abs = entry_abs + int(stop_i)
-                    pnl = (stop - buy) / buy
+                    raw_exit_price = stop
                 else:
                     exit_abs = entry_abs + int(target_i)
-                    pnl = (target - buy) / buy
+                    raw_exit_price = target
 
             # --- Logic B: Dynamic Trailing Stop ---
             elif exit_mode == 'trailing':
-                trigger_price = buy + risk * params['trigger_r']
+                trigger_price = real_buy + risk * params['trigger_r']
                 current_stop = stop
                 trailing_active = False
                 
@@ -191,7 +215,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                     
                     # 1. Check Stop Hit
                     if l <= current_stop:
-                        pnl = (current_stop - buy) / buy
+                        raw_exit_price = current_stop
                         exit_abs = entry_abs + k
                         exit_found = True
                         break
@@ -199,7 +223,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                     # 2. Check Trigger (Activate Trail)
                     if not trailing_active and h >= trigger_price:
                         trailing_active = True
-                        current_stop = buy # Move to Breakeven immediately
+                        current_stop = real_buy # Move to Breakeven immediately
                     
                     # 3. Update Trail
                     if trailing_active:
@@ -210,13 +234,20 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                 if not exit_found:
                     # Held until end of data
                     exit_abs = len(path_high) - 1 + entry_abs
-                    pnl = (path_close[-1] - buy) / buy
+                    raw_exit_price = path_close[-1]
 
             # Add candidate
             if exit_abs != -1:
+                # 3. Apply Slippage to Exit
+                exit_tick = get_tick_size(raw_exit_price)
+                real_exit = raw_exit_price - exit_tick
+                
+                # 4. Calculate Net PnL
+                pnl = calculate_net_pnl(real_buy, real_exit)
+                
                 candidates.append({
                     'sid': sid,
-                    'buy_price': buy,
+                    'buy_price': real_buy,
                     'entry_date': entry_date,
                     'exit_date': date_list[exit_abs],
                     'pnl': pnl,
