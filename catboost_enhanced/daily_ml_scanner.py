@@ -579,19 +579,20 @@ def generate_recommendation_report(signals_df, backtest_df):
                     report += f"### {grade} 級推薦 ({len(grade_signals)} 個)\n\n"
 
                     # 表格頭
-                    report += "| 代碼 | Pattern | 當前價 | 買入價 | 停損價 | 距離% | 狀態 | 年化報酬 | 勝率 | Sharpe | MDD | 連勝 | 連敗 |\n"
-                    report += "|------|---------|--------|--------|--------|-------|------|---------|------|--------|-----|-------|-------|\n"
+                    report += "| 代碼 | Pattern | 出場模式 | 當前價 | 買入價 | 停損價 | 距離% | 狀態 | 年化報酬 | 勝率 | Sharpe | MDD | 連勝 | 連敗 |\n"
+                    report += "|------|---------|----------|--------|--------|--------|-------|------|---------|------|--------|-----|-------|-------|\n"
 
                     for _, row in grade_signals.head(50).iterrows():  # 限制每級最多 50 個
                         sid = str(row['sid']) if 'sid' in row and pd.notna(row['sid']) else 'N/A'
                         pattern = str(row.get('pattern_type', 'N/A')).upper()
+                        exit_mode = str(row.get('exit_mode', 'N/A'))
                         current = float(row.get('current_price', 0))
                         buy = float(row.get('buy_price', 0))
                         stop = float(row.get('stop_price', 0))
                         dist = float(row.get('distance_pct', 0))
                         status = str(row.get('status', 'N/A'))
 
-                        line = f"| {sid} | {pattern} | {current:.2f} | {buy:.2f} | {stop:.2f} | {dist:.1f}% | {status}"
+                        line = f"| {sid} | {pattern} | {exit_mode} | {current:.2f} | {buy:.2f} | {stop:.2f} | {dist:.1f}% | {status}"
 
                         # 年化報酬
                         if 'Ann. Return %' in row and pd.notna(row['Ann. Return %']):
@@ -671,12 +672,13 @@ def generate_recommendation_report(signals_df, backtest_df):
                             report += f"### {scan_date} ({len(day_signals)} 個)\n\n"
 
                             # 表格頭
-                            report += "| 代碼 | Pattern | 當前價 | 買入價 | 停損價 | 距離% | 級別 | 年化報酬 | Sharpe |\n"
-                            report += "|------|---------|--------|--------|--------|-------|------|---------|--------|\n"
+                            report += "| 代碼 | Pattern | 出場模式 | 當前價 | 買入價 | 停損價 | 距離% | 級別 | 年化報酬 | Sharpe |\n"
+                            report += "|------|---------|----------|--------|--------|--------|-------|------|---------|--------|\n"
 
                             for _, row in day_signals.iterrows():
                                 sid = str(row.get('sid', 'N/A'))
                                 pattern = str(row.get('pattern_type', 'N/A')).upper()
+                                exit_mode = str(row.get('exit_mode', 'N/A'))
                                 current = float(row.get('current_price', 0)) if 'current_price' in row else 0
                                 buy = float(row.get('buy_price', 0)) if 'buy_price' in row else 0
                                 stop = float(row.get('stop_price', 0)) if 'stop_price' in row else 0
