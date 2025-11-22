@@ -1,4 +1,6 @@
 # Repository Guidelines
+## 通用規則
+- 回覆我的語言都要是繁體中文
 
 ## Project Structure & Module Organization
 - Root workspace: `stock/` (core pipeline), `stock/ml_enhanced/` (ML layer), `stock/src/` (shared libs), `stock/scripts/` (data prep/backtest utilities), `stock/data/` (raw + processed CSVs).  

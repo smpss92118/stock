@@ -41,7 +41,7 @@ OUTPUT_CSV = os.path.join(os.path.dirname(__file__), '../results/ml_backtest_fin
 OUTPUT_REPORT = os.path.join(os.path.dirname(__file__), '../results/ml_backtest_final.md')
 
 def load_ml_models():
-    """載入 ML 模型 (Pattern Specific)"""
+    """載入 ML 模型 (Pattern Specific) - 優先使用最新 per-exit 模型"""
     print("Loading ML Stock Selectors...")
     models = {}
     
@@ -50,14 +50,22 @@ def load_ml_models():
             feature_info = pickle.load(f)
         
         patterns = ['cup', 'htf', 'vcp']
+        exit_modes = feature_info.get('exit_modes', ['trailing_15r', 'fixed_r3_t20', 'fixed_r2_t20'])
+        load_candidates = {}
         for pat in patterns:
-            path = os.path.join(MODEL_DIR, f'stock_selector_{pat}.pkl')
-            if os.path.exists(path):
-                with open(path, 'rb') as f:
-                    models[pat] = pickle.load(f)
-                print(f"✅ Loaded model: {pat.upper()}")
-            else:
-                print(f"⚠️ Model not found: {path}")
+            # 優先順序：trailing_15r -> fixed_r3_t20 -> fixed_r2_t20 -> legacy name
+            candidate_paths = [
+                os.path.join(MODEL_DIR, f'stock_selector_{pat}_{em}.pkl') for em in exit_modes
+            ] + [os.path.join(MODEL_DIR, f'stock_selector_{pat}.pkl')]
+            for path in candidate_paths:
+                if os.path.exists(path):
+                    with open(path, 'rb') as f:
+                        models[pat] = pickle.load(f)
+                    load_candidates[pat] = os.path.basename(path)
+                    print(f"✅ Loaded model: {pat.upper()} ({os.path.basename(path)})")
+                    break
+            if pat not in load_candidates:
+                print(f"⚠️ No model found for pattern {pat.upper()} (checked {len(candidate_paths)} candidates)")
                 
         print(f"✅ Feature info loaded (trained: {feature_info['trained_date']})")
         return models, feature_info['feature_cols']

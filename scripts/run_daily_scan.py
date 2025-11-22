@@ -124,7 +124,12 @@ def scan_latest_date(df):
         high_52w = row_today['high_52w']
         
         # 檢測 CUP
-        is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
+        cup_res = detect_cup(window, ma_info, rs_rating=rs_rating)
+        if len(cup_res) == 4:
+            is_cup, cup_buy, cup_stop, cup_days = cup_res
+        else:
+            is_cup, cup_buy, cup_stop = cup_res
+            cup_days = None
         if is_cup:
             current_price = row_today['close']
             
@@ -157,7 +162,12 @@ def scan_latest_date(df):
             })
         
         # 檢測 HTF
-        is_htf, htf_buy, htf_stop, htf_grade = detect_htf(window, rs_rating=rs_rating)
+        htf_res = detect_htf(window, rs_rating=rs_rating)
+        if len(htf_res) == 5:
+            is_htf, htf_buy, htf_stop, htf_grade, htf_days = htf_res
+        else:
+            is_htf, htf_buy, htf_stop, htf_grade = htf_res
+            htf_days = None
         if is_htf:
             current_price = row_today['close']
             
@@ -189,13 +199,18 @@ def scan_latest_date(df):
                 'status': status
             })
         
-        # 檢測 VCP（可選，因為表現不佳）
-        # is_vcp, vcp_buy, vcp_stop = detect_vcp(window, row_today['vol_ma50'], row_today['ma50'], rs_rating=rs_rating, high_52w=high_52w)
+        # 檢測 VCP（可選）
+        # vcp_res = detect_vcp(window, vol_ma50_val=row_today['vol_ma50'], price_ma50_val=row_today['ma50'], rs_rating=rs_rating, high_52w=high_52w)
+        # if len(vcp_res) == 4:
+        #     is_vcp, vcp_buy, vcp_stop, vcp_days = vcp_res
+        # else:
+        #     is_vcp, vcp_buy, vcp_stop = vcp_res
+        #     vcp_days = None
         # if is_vcp:
         #     current_price = row_today['close']
         #     if current_price <= vcp_stop or current_price >= vcp_buy:
         #         continue
-        #     ... (類似處理)
+        #     ...
     
     return signals, latest_date
 

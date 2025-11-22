@@ -1,5 +1,5 @@
 # Backtest Report V2
-Generated: 2025-11-22 10:06:08.567359
+Generated: 2025-11-22 20:33:30.507862
 
 | Strategy           | Settings              |   Ann. Return % |   Return % |   Sharpe |   Trades |   Win Rate |   Avg Holding Days |   Max DD % |   Max Win Streak |   Max Loss Streak |
 |:-------------------|:----------------------|----------------:|-----------:|---------:|---------:|-----------:|-------------------:|-----------:|-----------------:|------------------:|

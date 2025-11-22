@@ -25,6 +25,7 @@ from scripts.run_backtest import load_data_polars, generate_trade_candidates
 # Import shared modules
 from src.utils.logger import setup_logger
 from src.ml.features import calculate_technical_indicators, extract_ml_features
+from src.data.institutional import load_institutional_raw, compute_institutional_features
 
 # Configuration
 PATTERN_FILE = os.path.join(os.path.dirname(__file__), '../../data/processed/pattern_analysis_result.csv')
@@ -261,12 +262,58 @@ def main():
     
     # Convert to pandas for easier manipulation
     df_pd = df.to_pandas()
+    # Ensure merge keys are aligned
+    df_pd['sid'] = df_pd['sid'].astype(str)
+    df_pd['date'] = pd.to_datetime(df_pd['date'])
     if 'volume' not in df_pd.columns:
         logger.error("❌ volume column missing in pattern_analysis_result.csv. Regenerate it with run_historical_analysis.py.")
         return
     if df_pd['volume'].isna().all():
         logger.error("❌ volume column is empty. Check data extraction before ML prep.")
         return
+    
+    # Merge institutional flows (use only past data to avoid leakage)
+    inst_raw = load_institutional_raw()
+    inst_feature_cols = [
+        'foreign_net_lag1',
+        'investment_net_lag1',
+        'dealer_net_lag1',
+        'total_net_lag1',
+        'foreign_net_sum_3d',
+        'foreign_net_sum_5d',
+        'foreign_net_sum_10d',
+        'foreign_net_sum_20d',
+        'total_net_sum_3d',
+        'total_net_sum_5d',
+        'total_net_sum_10d',
+        'total_net_sum_20d',
+        'foreign_investment_spread_lag1',
+        'dealer_dominance_lag1',
+        'foreign_net_to_vol_lag1',
+        'total_net_to_vol_lag1'
+    ]
+    if inst_raw is None or inst_raw.empty:
+        logger.warning("⚠️ No institutional data found; continuing without new features.")
+        for col in inst_feature_cols:
+            df_pd[col] = 0
+    else:
+        logger.info("Merging institutional flow features (lagged/rolling only)...")
+        inst_feat_df = compute_institutional_features(inst_raw)
+        inst_feat_df['sid'] = inst_feat_df['sid'].astype(str)
+        inst_feat_df['date'] = pd.to_datetime(inst_feat_df['date'])
+        df_pd = df_pd.merge(inst_feat_df, on=['sid', 'date'], how='left')
+        
+        # Compute ratios vs volume using lagged flows
+        volume_safe = df_pd['volume'].replace(0, np.nan)
+        df_pd['foreign_net_to_vol_lag1'] = df_pd['foreign_net_lag1'] / volume_safe
+        df_pd['total_net_to_vol_lag1'] = df_pd['total_net_lag1'] / volume_safe
+        
+        # Fill missing institutional features with median (per column)
+        for col in inst_feature_cols:
+            if col not in df_pd.columns:
+                df_pd[col] = np.nan
+        median_fill = df_pd[inst_feature_cols].median()
+        df_pd[inst_feature_cols] = df_pd[inst_feature_cols].fillna(median_fill)
     
     # Calculate technical indicators
     logger.info("Calculating technical indicators for all stocks...")

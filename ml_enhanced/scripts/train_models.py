@@ -18,6 +18,7 @@ import os
 import pandas as pd
 import numpy as np
 import pickle
+import json
 from datetime import datetime
 
 # Add paths
@@ -27,18 +28,19 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 try:
     import xgboost as xgb
     from sklearn.model_selection import train_test_split, cross_val_score
-    from sklearn.metrics import classification_report, roc_auc_score, mean_squared_error, r2_score
+    from sklearn.metrics import classification_report, roc_auc_score, mean_squared_error, r2_score, precision_score, recall_score
 except ImportError:
     print("❌ Missing ML libraries. Installing...")
     import subprocess
     subprocess.run([sys.executable, "-m", "pip", "install", "xgboost", "scikit-learn"], check=True)
     import xgboost as xgb
     from sklearn.model_selection import train_test_split, cross_val_score
-    from sklearn.metrics import classification_report, roc_auc_score, mean_squared_error, r2_score
+    from sklearn.metrics import classification_report, roc_auc_score, mean_squared_error, r2_score, precision_score, recall_score
 
 # Configuration
 DATA_FILE = os.path.join(os.path.dirname(__file__), '../data/ml_features.csv')
 MODEL_DIR = os.path.join(os.path.dirname(__file__), '../models')
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), '../results')
 SELECTOR_MODEL_PATH = os.path.join(MODEL_DIR, 'stock_selector.pkl')
 SIZER_MODEL_PATH = os.path.join(MODEL_DIR, 'position_sizer.pkl')
 
@@ -82,7 +84,25 @@ FEATURE_COLS = [
     
     # Signal counts (2) - placeholder for future implementation
     'signal_count_ma10',
-    'signal_count_ma60'
+    'signal_count_ma60',
+
+    # Institutional flows (lag/rolling) - NEW
+    'foreign_net_lag1',
+    'investment_net_lag1',
+    'dealer_net_lag1',
+    'total_net_lag1',
+    'foreign_net_sum_3d',
+    'foreign_net_sum_5d',
+    'foreign_net_sum_10d',
+    'foreign_net_sum_20d',
+    'total_net_sum_3d',
+    'total_net_sum_5d',
+    'total_net_sum_10d',
+    'total_net_sum_20d',
+    'foreign_investment_spread_lag1',
+    'dealer_dominance_lag1',
+    'foreign_net_to_vol_lag1',
+    'total_net_to_vol_lag1'
 ]
 
 def load_and_prepare_data():
@@ -130,6 +150,49 @@ def time_based_split(df, test_size=0.2):
     print(f"  Test:  {len(test_df)} samples ({test_df['date'].min()} to {test_df['date'].max()})")
     
     return train_df, test_df
+
+
+def generate_walk_forward_windows(df, train_months=3, test_months=1, min_train=50, min_test=20, max_windows=24):
+    """產生滑動窗口 (月為單位)，避免資料洩漏。"""
+    df_sorted = df.sort_values("date").reset_index(drop=True)
+    if df_sorted.empty:
+        return []
+
+    windows = []
+    start = df_sorted["date"].min()
+    end = df_sorted["date"].max()
+    window_count = 0
+
+    while window_count < max_windows:
+        train_end = start + pd.DateOffset(months=train_months)
+        test_end = train_end + pd.DateOffset(months=test_months)
+
+        train_mask = (df_sorted["date"] >= start) & (df_sorted["date"] < train_end)
+        test_mask = (df_sorted["date"] >= train_end) & (df_sorted["date"] < test_end)
+
+        train_df = df_sorted[train_mask]
+        test_df = df_sorted[test_mask]
+
+        if len(train_df) < min_train or len(test_df) < min_test:
+            break
+
+        windows.append(
+            {
+                "train_df": train_df,
+                "test_df": test_df,
+                "train_start": train_df["date"].min(),
+                "train_end": train_df["date"].max(),
+                "test_start": test_df["date"].min(),
+                "test_end": test_df["date"].max(),
+            }
+        )
+
+        window_count += 1
+        start = start + pd.DateOffset(months=test_months)
+        if start >= end:
+            break
+
+    return windows
 
 def train_stock_selector(train_df, test_df):
     """訓練股票選擇模型 (分類)"""
@@ -284,6 +347,138 @@ def train_position_sizer(train_df, test_df):
     
     return model
 
+
+def adversarial_validation_walk_forward(df, feature_cols, train_months=3, test_months=1):
+    """
+    對抗驗證：以 walk-forward 將 train 標為 0、test 標為 1，觀察分佈漂移。
+    """
+    windows = generate_walk_forward_windows(df, train_months=train_months, test_months=test_months)
+    if not windows:
+        print("⚠️ Not enough data for adversarial validation.")
+        return []
+
+    reports = []
+    for idx, w in enumerate(windows, start=1):
+        train_df = w["train_df"]
+        test_df = w["test_df"]
+        adv_df = pd.concat(
+            [
+                train_df.assign(split_label=0),
+                test_df.assign(split_label=1),
+            ],
+            ignore_index=True,
+        )
+
+        X = adv_df[feature_cols]
+        y = adv_df["split_label"]
+
+        model = xgb.XGBClassifier(
+            n_estimators=120,
+            max_depth=4,
+            learning_rate=0.08,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            eval_metric="logloss",
+            use_label_encoder=False,
+        )
+        model.fit(X, y)
+
+        proba = model.predict_proba(X)[:, 1]
+        auc = roc_auc_score(y, proba)
+
+        feature_importance = pd.DataFrame(
+            {
+                "feature": feature_cols,
+                "importance": model.feature_importances_,
+            }
+        ).sort_values("importance", ascending=False)
+
+        top_features = feature_importance.head(10).to_dict(orient="records")
+
+        report = {
+            "window": idx,
+            "train_start": str(w["train_start"].date()),
+            "train_end": str(w["train_end"].date()),
+            "test_start": str(w["test_start"].date()),
+            "test_end": str(w["test_end"].date()),
+            "auc": float(auc),
+            "top_features": top_features,
+        }
+        reports.append(report)
+
+        print(f"\n[Adversarial] Window {idx}: AUC={auc:.4f} ({w['train_start'].date()}~{w['test_end'].date()})")
+        print("  Top drift candidates:")
+        print(feature_importance.head(5).to_string(index=False))
+
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    out_path = os.path.join(RESULTS_DIR, "adversarial_report.json")
+    with open(out_path, "w") as f:
+        json.dump(reports, f, indent=2)
+    print(f"\n✅ Adversarial validation saved to: {out_path}")
+    return reports
+
+
+def walk_forward_classification(df, feature_cols, train_months=3, test_months=1):
+    """
+    滑動窗口驗證：使用分類模型，回報各窗口 AUC/Precision/Recall。
+    """
+    windows = generate_walk_forward_windows(df, train_months=train_months, test_months=test_months)
+    if not windows:
+        print("⚠️ Not enough data for walk-forward evaluation.")
+        return []
+
+    results = []
+    for idx, w in enumerate(windows, start=1):
+        train_df = w["train_df"]
+        test_df = w["test_df"]
+        X_train = train_df[feature_cols]
+        y_train = train_df["is_winner"]
+        X_test = test_df[feature_cols]
+        y_test = test_df["is_winner"]
+
+        model = xgb.XGBClassifier(
+            n_estimators=150,
+            max_depth=5,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            eval_metric="logloss",
+            use_label_encoder=False,
+        )
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_test)[:, 1]
+        y_pred = (proba >= 0.5).astype(int)
+
+        auc = roc_auc_score(y_test, proba)
+        precision = precision_score(y_test, y_pred, zero_division=0)
+        recall = recall_score(y_test, y_pred, zero_division=0)
+
+        result = {
+            "window": idx,
+            "train_start": str(w["train_start"].date()),
+            "train_end": str(w["train_end"].date()),
+            "test_start": str(w["test_start"].date()),
+            "test_end": str(w["test_end"].date()),
+            "train_samples": len(train_df),
+            "test_samples": len(test_df),
+            "auc": float(auc),
+            "precision": float(precision),
+            "recall": float(recall),
+        }
+        results.append(result)
+
+        print(f"\n[Walk-Forward] Window {idx}: AUC={auc:.4f}, Precision={precision:.3f}, Recall={recall:.3f}")
+        print(f"  Train {len(train_df)} samples ({w['train_start'].date()}~{w['train_end'].date()}), "
+              f"Test {len(test_df)} samples ({w['test_start'].date()}~{w['test_end'].date()})")
+
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    out_path = os.path.join(RESULTS_DIR, "walk_forward_summary.csv")
+    pd.DataFrame(results).to_csv(out_path, index=False)
+    print(f"\n✅ Walk-forward summary saved to: {out_path}")
+    return results
+
 def save_models(selector_model, sizer_model):
     """儲存模型"""
     print("\n" + "="*80)
@@ -348,6 +543,12 @@ def main():
     
     # 1. Load data
     df = load_and_prepare_data()
+    
+    # 1b. Drift check with adversarial validation (walk-forward)
+    adversarial_validation_walk_forward(df, FEATURE_COLS, train_months=3, test_months=1)
+    
+    # 1c. Walk-forward evaluation (classification only, all patterns combined)
+    walk_forward_classification(df, FEATURE_COLS, train_months=3, test_months=1)
     
     # 2. Train per pattern × exit_mode combination
     patterns = ['cup', 'htf', 'vcp']

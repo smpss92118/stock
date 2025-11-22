@@ -46,29 +46,36 @@ BACKTEST_RESULTS_PATH = os.path.join(os.path.dirname(__file__), 'results/ml_back
 logger = setup_logger('daily_ml_scanner')
 
 def load_all_ml_models():
-    """載入所有 ML 模型 (9個: 3 patterns × 3 exit modes)"""
+    """載入 ML 模型 (優先使用最新 per-exit)，並對齊特徵欄位。"""
     try:
+        # Load feature info first
+        with open(FEATURE_INFO_PATH, 'rb') as f:
+            feature_info = pickle.load(f)
+        feature_cols = feature_info.get('feature_cols', [])
+        exit_modes = feature_info.get('exit_modes', ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r'])
+
         models = {}
         patterns = ['cup', 'htf', 'vcp']
-        exit_modes = ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r']
-        
         for pat in patterns:
             for exit_mode in exit_modes:
                 model_key = f'{pat}_{exit_mode}'
-                model_path = os.path.join(MODEL_DIR, f'stock_selector_{model_key}.pkl')
-                
-                if os.path.exists(model_path):
-                    with open(model_path, 'rb') as f:
-                        models[model_key] = pickle.load(f)
-                else:
-                    logger.warning(f"⚠️ Model not found: {model_path}")
-        
-        # Load feature info
-        with open(FEATURE_INFO_PATH, 'rb') as f:
-            feature_info = pickle.load(f)
-        
+                candidates = [
+                    os.path.join(MODEL_DIR, f'stock_selector_{model_key}.pkl'),
+                    os.path.join(MODEL_DIR, f'stock_selector_{pat}.pkl'),  # legacy fallback
+                ]
+                loaded = False
+                for path in candidates:
+                    if os.path.exists(path):
+                        with open(path, 'rb') as f:
+                            models[model_key] = pickle.load(f)
+                        logger.info(f"✅ Loaded model: {os.path.basename(path)} for {model_key}")
+                        loaded = True
+                        break
+                if not loaded:
+                    logger.warning(f"⚠️ Model not found for {model_key} (checked {len(candidates)} candidates)")
+
         logger.info(f"✅ 載入 {len(models)} 個 ML 模型")
-        return models, feature_info['feature_cols']
+        return models, feature_cols
     except Exception as e:
         logger.error(f"⚠️ ML 模型載入失敗: {e}")
         return None, None
@@ -93,8 +100,30 @@ def predict_best_exit(models, feature_cols, features_dict, pattern_type):
     if models is None:
         return 'fixed_r2_t20', 0.5, {}
     
+    def _build_aligned_df(model, feature_cols):
+        """對齊模型訓練過的特徵名稱，補齊缺值 0，並移除多餘欄位以避免 mismatch。"""
+        expected = None
+        try:
+            booster = model.get_booster()
+            expected = booster.feature_names
+        except Exception:
+            expected = None
+
+        if expected and len(expected) > 0:
+            expected_cols = list(expected)
+        else:
+            expected_cols = feature_cols
+
+        row = {}
+        for col in expected_cols:
+            row[col] = features_dict.get(col, 0)
+
+        return pd.DataFrame([row])[expected_cols]
+
     try:
-        X = pd.DataFrame([features_dict])[feature_cols]
+        # 先建立一次以檢查列完備性
+        sample_model = next(iter(models.values())) if models else None
+        X_template = _build_aligned_df(sample_model, feature_cols) if sample_model else pd.DataFrame([features_dict])
         
         # 預測所有3種出場方式
         exit_modes = ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r']
@@ -103,6 +132,7 @@ def predict_best_exit(models, feature_cols, features_dict, pattern_type):
         for exit_mode in exit_modes:
             model_key = f'{pattern_type}_{exit_mode}'
             if model_key in models:
+                X = _build_aligned_df(models[model_key], feature_cols)
                 proba = models[model_key].predict_proba(X)[0][1]
                 predictions[exit_mode] = proba
             else:
@@ -157,13 +187,20 @@ def scan_with_ml(df, model, feature_cols):
         rs_rating = row_today.get('rs_rating', 0)
         
         # Detect HTF
-        is_htf, htf_buy, htf_stop, htf_grade = detect_htf(window, rs_rating=rs_rating)
+        htf_res = detect_htf(window, rs_rating=rs_rating)
+        if len(htf_res) == 5:
+            is_htf, htf_buy, htf_stop, htf_grade, htf_days = htf_res
+        else:
+            is_htf, htf_buy, htf_stop, htf_grade = htf_res
+            htf_days = None
         if is_htf and htf_buy and htf_stop and row_today['close'] > htf_stop:
             # Add temporary pattern info to row for feature extraction
             row_today_htf = row_today.copy()
             row_today_htf['htf_buy_price'] = htf_buy
             row_today_htf['htf_stop_price'] = htf_stop
             row_today_htf['htf_grade'] = htf_grade
+            if htf_days is not None:
+                row_today_htf['htf_days'] = htf_days
             
             features = extract_ml_features(row_today_htf, 'htf')
             
@@ -200,12 +237,19 @@ def scan_with_ml(df, model, feature_cols):
             })
         
         # Detect CUP
-        is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
+        cup_res = detect_cup(window, ma_info, rs_rating=rs_rating)
+        if len(cup_res) == 4:
+            is_cup, cup_buy, cup_stop, cup_days = cup_res
+        else:
+            is_cup, cup_buy, cup_stop = cup_res
+            cup_days = None
         if is_cup and cup_buy and cup_stop and row_today['close'] > cup_stop:
             # Add temporary pattern info to row for feature extraction
             row_today_cup = row_today.copy()
             row_today_cup['cup_buy_price'] = cup_buy
             row_today_cup['cup_stop_price'] = cup_stop
+            if cup_days is not None:
+                row_today_cup['cup_days'] = cup_days
             
             features = extract_ml_features(row_today_cup, 'cup')
             
@@ -242,12 +286,19 @@ def scan_with_ml(df, model, feature_cols):
 
         # Detect VCP
         vol_ma50 = window['volume'].rolling(50).mean().iloc[-1] if len(window) >= 50 else window['volume'].mean()
-        is_vcp, vcp_buy, vcp_stop = detect_vcp(window, vol_ma50_val=vol_ma50, price_ma50_val=ma_info['ma50'], rs_rating=rs_rating)
+        vcp_res = detect_vcp(window, vol_ma50_val=vol_ma50, price_ma50_val=ma_info['ma50'], rs_rating=rs_rating)
+        if len(vcp_res) == 4:
+            is_vcp, vcp_buy, vcp_stop, vcp_days = vcp_res
+        else:
+            is_vcp, vcp_buy, vcp_stop = vcp_res
+            vcp_days = None
         if is_vcp and vcp_buy and vcp_stop and row_today['close'] > vcp_stop:
             # Add temporary pattern info to row for feature extraction
             row_today_vcp = row_today.copy()
             row_today_vcp['vcp_buy_price'] = vcp_buy
             row_today_vcp['vcp_stop_price'] = vcp_stop
+            if vcp_days is not None:
+                row_today_vcp['vcp_days'] = vcp_days
             
             features = extract_ml_features(row_today_vcp, 'vcp')
             

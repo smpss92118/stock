@@ -256,5 +256,27 @@ def extract_ml_features(row, pattern_type):
     # 10. Signal Counts (2) - Placeholder (TODO: implement)
     features['signal_count_ma10'] = 0
     features['signal_count_ma60'] = 0
+
+    # 11. Institutional Flow Features (lagged/rolling to avoid leakage)
+    inst_cols_defaults = {
+        'foreign_net_lag1': 0,
+        'investment_net_lag1': 0,
+        'dealer_net_lag1': 0,
+        'total_net_lag1': 0,
+        'foreign_net_sum_3d': 0,
+        'foreign_net_sum_5d': 0,
+        'foreign_net_sum_10d': 0,
+        'foreign_net_sum_20d': 0,
+        'total_net_sum_3d': 0,
+        'total_net_sum_5d': 0,
+        'total_net_sum_10d': 0,
+        'total_net_sum_20d': 0,
+        'foreign_investment_spread_lag1': 0,
+        'dealer_dominance_lag1': 0,
+        'foreign_net_to_vol_lag1': 0,
+        'total_net_to_vol_lag1': 0
+    }
+    for col, default in inst_cols_defaults.items():
+        features[col] = row.get(col, default)
     
     return features
