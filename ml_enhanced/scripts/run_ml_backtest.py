@@ -33,36 +33,61 @@ from scripts.run_backtest import (
 )
 
 # Configuration
-MODEL_PATH = os.path.join(os.path.dirname(__file__), '../models/stock_selector.pkl')
-FEATURE_INFO_PATH = os.path.join(os.path.dirname(__file__), '../models/feature_info.pkl')
+# Configuration
+MODEL_DIR = os.path.join(os.path.dirname(__file__), '../models')
+FEATURE_INFO_PATH = os.path.join(MODEL_DIR, 'feature_info.pkl')
 ML_FEATURES_PATH = os.path.join(os.path.dirname(__file__), '../data/ml_features.csv')
 OUTPUT_CSV = os.path.join(os.path.dirname(__file__), '../results/ml_backtest_final.csv')
 OUTPUT_REPORT = os.path.join(os.path.dirname(__file__), '../results/ml_backtest_final.md')
 
-def load_ml_model():
-    """載入 ML 模型"""
-    print("Loading ML Stock Selector...")
+def load_ml_models():
+    """載入 ML 模型 (Pattern Specific)"""
+    print("Loading ML Stock Selectors...")
+    models = {}
     
-    with open(MODEL_PATH, 'rb') as f:
-        model = pickle.load(f)
-    
-    with open(FEATURE_INFO_PATH, 'rb') as f:
-        feature_info = pickle.load(f)
-    
-    print(f"✅ Model loaded (trained: {feature_info['trained_date']})")
-    return model, feature_info['feature_cols']
+    try:
+        with open(FEATURE_INFO_PATH, 'rb') as f:
+            feature_info = pickle.load(f)
+        
+        patterns = ['cup', 'htf', 'vcp']
+        for pat in patterns:
+            path = os.path.join(MODEL_DIR, f'stock_selector_{pat}.pkl')
+            if os.path.exists(path):
+                with open(path, 'rb') as f:
+                    models[pat] = pickle.load(f)
+                print(f"✅ Loaded model: {pat.upper()}")
+            else:
+                print(f"⚠️ Model not found: {path}")
+                
+        print(f"✅ Feature info loaded (trained: {feature_info['trained_date']})")
+        return models, feature_info['feature_cols']
+    except Exception as e:
+        print(f"❌ Failed to load models: {e}")
+        return {}, []
 
-def predict_all_signals(model, feature_cols):
-    """對所有訊號進行預測"""
+def predict_all_signals(models, feature_cols):
+    """對所有訊號進行預測 (使用特定模型)"""
     print("\nLoading ML features...")
     df_features = pd.read_csv(ML_FEATURES_PATH)
     print(f"  Total signals: {len(df_features)}")
     
-    # Predict
-    X = df_features[feature_cols]
-    probas = model.predict_proba(X)[:, 1]
-    df_features['ml_proba'] = probas
+    # Initialize proba column
+    df_features['ml_proba'] = 0.0
     
+    # Predict per pattern
+    for pattern, model in models.items():
+        # Filter by pattern type (case insensitive)
+        mask = df_features['pattern_type'].str.lower() == pattern
+        if not mask.any():
+            continue
+            
+        X = df_features.loc[mask, feature_cols]
+        if len(X) > 0:
+            probas = model.predict_proba(X)[:, 1]
+            df_features.loc[mask, 'ml_proba'] = probas
+            print(f"  Predicted {len(X)} {pattern.upper()} signals")
+    
+    probas = df_features['ml_proba']
     print(f"\nPrediction Distribution:")
     print(f"  Mean: {probas.mean():.3f}")
     print(f"  Median: {np.median(probas):.3f}")
@@ -149,11 +174,11 @@ def main():
     print("ML-Enhanced Backtest (Final)")
     print("="*80)
     
-    # Load ML model
-    model, feature_cols = load_ml_model()
+    # Load ML models
+    models, feature_cols = load_ml_models()
     
     # Predict all signals
-    df_ml_signals = predict_all_signals(model, feature_cols)
+    df_ml_signals = predict_all_signals(models, feature_cols)
     
     # Load original data using load_data_polars (which calculates MA)
     print(f"\nLoading pattern data with MA...")

@@ -135,15 +135,15 @@
 
 | 參數名稱 | 當前值 | 位置 | 說明 |
 |---------|--------|------|------|
-| `zigzag_threshold` | 0.05 | L10 | ZigZag 轉折閾值（5%）|
+| `zigzag_threshold` | 0.07 | L10 | ZigZag 轉折閾值（7%，已優化）|
 | `min_up_ratio` | 0.5 | L11 | 上漲幅度最小值（50%）|
-| `vol_dry_up_ratio` | 0.5 | L12 | 成交量乾涸比例（50%）|
+| `vol_dry_up_ratio` | 0.45 | L12 | 成交量乾涸比例（45%，已優化）|
 | `rs_rating_threshold` | 0.0 | L24 | RS Rating 門檻 |
 | `min_window` | 50 | L20 | 最小資料天數 |
-| `min_window_high_idx` | 10 | L36 | 最高點最小位置 |
-| `pivot_proximity` | 0.95 | L96 | 價格接近轉折點（95%）|
-| `min_contractions` | 2 | L58 | 最小收縮次數 |
-| `recent_vol_window` | 5 | L69 | 近期成交量窗口 |
+| `min_window_high_idx` | 10 | L36 | 視窗內最高點最小位置（日數）|
+| `pivot_proximity` | 0.95 | L96 | 價格接近轉折點比例（95%）|
+| `min_contractions` | 2 | L58 | 最小收縮波次數 |
+| `recent_vol_window` | 5 | L69 | 近期成交量計算窗口（日數）|
 
 ### 優化建議
 

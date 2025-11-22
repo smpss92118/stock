@@ -314,33 +314,70 @@ def save_models(selector_model, sizer_model):
         pickle.dump(feature_info, f)
     print(f"✅ Feature info saved to: {feature_info_path}")
 
+def train_pattern_model(pattern_type, df):
+    """Train model for a specific pattern type"""
+    print(f"\n{'='*80}")
+    print(f"Training Model for: {pattern_type.upper()}")
+    print(f"{'='*80}")
+    
+    # Filter data for this pattern
+    pattern_df = df[df['pattern_type'] == pattern_type.upper()].copy()
+    
+    if len(pattern_df) < 50:
+        print(f"⚠️ Not enough data for {pattern_type} (n={len(pattern_df)}). Skipping.")
+        return None, None
+        
+    print(f"Samples: {len(pattern_df)}")
+    
+    # Time split
+    train_df, test_df = time_based_split(pattern_df, test_size=0.2)
+    
+    # Train Selector
+    selector_model = train_stock_selector(train_df, test_df)
+    
+    # Train Sizer (Optional, maybe just use one global sizer? Or specific?)
+    # Let's train specific sizer too for completeness
+    sizer_model = train_position_sizer(train_df, test_df)
+    
+    return selector_model, sizer_model
+
 def main():
     print("="*80)
-    print("ML Model Training")
+    print("ML Model Training (Pattern Specific)")
     print("="*80)
     
     # 1. Load data
     df = load_and_prepare_data()
     
-    # 2. Time-based split
-    train_df, test_df = time_based_split(df, test_size=0.2)
+    # 2. Train per pattern
+    patterns = ['cup', 'htf', 'vcp']
     
-    # 3. Train Stock Selector
-    selector_model = train_stock_selector(train_df, test_df)
-    
-    # 4. Train Position Sizer
-    sizer_model = train_position_sizer(train_df, test_df)
-    
-    # 5. Save models
-    save_models(selector_model, sizer_model)
-    
+    for pat in patterns:
+        selector, sizer = train_pattern_model(pat, df)
+        
+        if selector and sizer:
+            # Save models
+            sel_path = os.path.join(MODEL_DIR, f'stock_selector_{pat}.pkl')
+            siz_path = os.path.join(MODEL_DIR, f'position_sizer_{pat}.pkl')
+            
+            with open(sel_path, 'wb') as f:
+                pickle.dump(selector, f)
+            with open(siz_path, 'wb') as f:
+                pickle.dump(sizer, f)
+                
+            print(f"✅ Saved models for {pat}")
+
+    # Save feature info (shared)
+    feature_info = {
+        'feature_cols': FEATURE_COLS,
+        'trained_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    with open(os.path.join(MODEL_DIR, 'feature_info.pkl'), 'wb') as f:
+        pickle.dump(feature_info, f)
+
     print("\n" + "="*80)
     print("Training Complete!")
     print("="*80)
-    print("\nNext Steps:")
-    print("1. Review model performance above")
-    print("2. If satisfied, proceed to Week 3: Backtest Integration")
-    print("3. Run: python stock/ml_enhanced/scripts/run_ml_backtest.py")
 
 if __name__ == "__main__":
     main()

@@ -34,25 +34,80 @@ STOCK_INFO_FILE = os.path.join(os.path.dirname(__file__), '../../data/raw/2023_2
 # Setup Logger
 logger = setup_logger('prepare_ml_data')
 
+def simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_price):
+    """
+    Simulate trade with Trailing Stop (Trigger 1.5R, Trail MA20).
+    Returns: pnl, duration
+    """
+    risk = buy_price - stop_price
+    if risk <= 0: return 0.0, 1
+    
+    trigger_price = buy_price + risk * 1.5
+    current_stop = stop_price
+    trailing_active = False
+    
+    exit_idx = -1
+    pnl = 0.0
+    
+    for k in range(len(high_np)):
+        h = high_np[k]
+        l = low_np[k]
+        c = close_np[k]
+        m = ma_np[k] if ma_np is not None else np.nan
+        
+        # 1. Check Stop
+        if l <= current_stop:
+            pnl = (current_stop - buy_price) / buy_price
+            exit_idx = k
+            break
+        
+        # 2. Check Trigger
+        if not trailing_active and h >= trigger_price:
+            trailing_active = True
+            current_stop = buy_price # Breakeven
+            
+        # 3. Update Trail
+        if trailing_active and not np.isnan(m):
+            current_stop = max(current_stop, m)
+            
+    if exit_idx == -1:
+        # End of data
+        exit_idx = len(high_np) - 1
+        pnl = (close_np[exit_idx] - buy_price) / buy_price
+        
+    duration = max(exit_idx, 1) # Avoid 0
+    return pnl, duration
+
 def generate_labels(df, pattern_type):
     """
-    生成標籤 (is_winner)
-    
-    Winner 定義:
-    1. 未來 20 天內最大漲幅 > 10%
-    2. 且在達到 10% 漲幅前，未觸及停損 (-5% 或 pattern stop)
+    Generate labels based on Score = Profit% / Duration.
+    Uses Trailing Stop simulation.
     """
     pattern_col = f'is_{pattern_type}'
     buy_col = f'{pattern_type}_buy_price'
     stop_col = f'{pattern_type}_stop_price'
     
+    # Filter signals
     signals = df[
         (df[pattern_col] == True) &
         (df[buy_col].notna()) &
         (df[stop_col].notna())
     ].copy()
     
-    trade_lookup = {}
+    trade_results = []
+    
+    # Prepare data for fast access
+    # We need to group by sid to get full history for simulation
+    # But df passed here might be the full dataframe? Yes, load_data_polars returns full df.
+    # df is a pandas DataFrame here.
+    
+    # Ensure MA20 exists (it should be calculated in main)
+    if 'ma20' not in df.columns:
+        # Fallback if not present (should be added in main)
+        df['ma20'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(20).mean())
+
+    # Partition by SID for speed
+    df_groups = dict(tuple(df.groupby('sid')))
     
     for idx, signal in signals.iterrows():
         sid = signal['sid']
@@ -60,70 +115,77 @@ def generate_labels(df, pattern_type):
         buy_price = signal[buy_col]
         stop_price = signal[stop_col]
         
-        # Get future prices for this stock
-        stock_data = df[
-            (df['sid'] == sid) &
-            (df['date'] > signal_date)
-        ].head(30)  # Next 30 days
+        if sid not in df_groups: continue
+        stock_df = df_groups[sid]
         
-        if len(stock_data) == 0:
-            continue
+        # Get data AFTER signal
+        # We need to find where signal_date is
+        # Assuming sorted
+        future_data = stock_df[stock_df['date'] > signal_date]
+        if len(future_data) == 0: continue
         
-        # Simple forward return calculation
-        # Find if price ever reached buy_price
-        entry_candidates = stock_data[stock_data['high'] >= buy_price]
+        # Check Entry (Limit Buy within 30 days)
+        # Find first day where High >= Buy
+        entry_candidates = future_data[future_data['high'] >= buy_price]
+        if len(entry_candidates) == 0: continue
         
-        if len(entry_candidates) == 0:
-            # Never triggered entry
-            actual_return = 0.0
-            is_winner = 0
+        entry_date = entry_candidates.iloc[0]['date']
+        
+        # Simulation Data (from entry onwards)
+        sim_data = stock_df[stock_df['date'] >= entry_date]
+        if len(sim_data) < 1: continue
+        
+        high_np = sim_data['high'].values
+        low_np = sim_data['low'].values
+        close_np = sim_data['close'].values
+        ma_np = sim_data['ma20'].values
+        
+        pnl, duration = simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_price)
+        
+        score = (pnl * 100) / duration
+        
+        trade_results.append({
+            'sid': sid,
+            'date': signal_date,
+            'actual_return': pnl,
+            'duration': duration,
+            'score': score
+        })
+        
+    if not trade_results:
+        return {}
+        
+    # Convert to DF to calculate quantiles
+    res_df = pd.DataFrame(trade_results)
+    
+    # Calculate Quartiles
+    q25 = res_df['score'].quantile(0.25)
+    q50 = res_df['score'].quantile(0.50)
+    q75 = res_df['score'].quantile(0.75)
+    
+    logger.info(f"Score Quartiles for {pattern_type}: 25%={q25:.2f}, 50%={q50:.2f}, 75%={q75:.2f}")
+    
+    trade_lookup = {}
+    for r in trade_results:
+        s = r['score']
+        if s >= q75:
+            label = 'A'
+            is_investable = 1
+        elif s >= q50:
+            label = 'B'
+            is_investable = 1 # Treat B as investable? Plan said A/B.
+        elif s >= q25:
+            label = 'C'
+            is_investable = 0
         else:
-            entry_date = entry_candidates.iloc[0]['date']
+            label = 'D'
+            is_investable = 0
             
-            # Look at price action AFTER entry
-            post_entry = stock_data[stock_data['date'] >= entry_date].copy()
-            
-            if len(post_entry) < 2:
-                actual_return = 0.0
-                is_winner = 0
-            else:
-                # Calculate max potential return in next 20 days
-                max_price = post_entry['high'].max()
-                min_price = post_entry['low'].min()
-                
-                max_return = (max_price - buy_price) / buy_price
-                max_drawdown = (min_price - buy_price) / buy_price
-                
-                # Winner definition: > 10% gain
-                # Loser definition: Hit stop loss (pattern stop)
-                
-                # Check if stop hit before target
-                stop_hit = False
-                target_hit = False
-                
-                for _, day in post_entry.iterrows():
-                    if day['low'] <= stop_price:
-                        stop_hit = True
-                        break
-                    if day['high'] >= buy_price * 1.10:
-                        target_hit = True
-                        break
-                
-                if target_hit and not stop_hit:
-                    is_winner = 1
-                    actual_return = 0.10 # Cap at target
-                elif stop_hit:
-                    is_winner = 0
-                    actual_return = (stop_price - buy_price) / buy_price
-                else:
-                    # Neither hit, take return at end of period
-                    final_price = post_entry.iloc[-1]['close']
-                    actual_return = (final_price - buy_price) / buy_price
-                    is_winner = 1 if actual_return > 0.10 else 0
-        
-        trade_lookup[(sid, signal_date)] = {
-            'actual_return': actual_return,
-            'is_winner': is_winner
+        trade_lookup[(r['sid'], r['date'])] = {
+            'actual_return': r['actual_return'],
+            'score': s,
+            'label_abcd': label,
+            'is_winner': is_investable # Mapping is_winner to is_investable for compatibility
         }
         
     return trade_lookup
@@ -153,6 +215,11 @@ def main():
     logger.info("Calculating technical indicators for all stocks...")
     # Use group_keys=False to avoid FutureWarning while keeping all columns
     df_pd = df_pd.groupby('sid', group_keys=False).apply(lambda x: calculate_technical_indicators(x)).reset_index(drop=True)
+    
+    # Ensure MA20 is present for simulation
+    if 'ma20' not in df_pd.columns:
+        logger.info("Calculating MA20 for simulation...")
+        df_pd['ma20'] = df_pd.groupby('sid')['close'].transform(lambda x: x.rolling(20).mean())
     
     # Generate features for each pattern type
     all_features = []
@@ -192,15 +259,18 @@ def main():
             features['date'] = date
             
             # Add label
+            # Add label
             if label_data:
                 features['actual_return'] = label_data['actual_return']
                 features['is_winner'] = label_data['is_winner']
+                features['score'] = label_data['score']
+                features['label_abcd'] = label_data['label_abcd']
             else:
                 # If no label (e.g. recent data), mark as unknown or skip
-                # For training, we need labels. For recent data, we might keep it for prediction?
-                # Here we assume this script is for TRAINING data, so we skip if no label (future data)
                 features['actual_return'] = 0
                 features['is_winner'] = 0
+                features['score'] = 0
+                features['label_abcd'] = 'Unknown'
             
             all_features.append(features)
             count += 1
