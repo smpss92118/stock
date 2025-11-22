@@ -584,20 +584,70 @@ def generate_ml_report(signals, scan_date, df_full=None, past_signals=None):
             f.write("> ⚠️ 無法載入最新回測結果，請檢查 ml_backtest_final.csv\n\n")
             f.write("---\n\n")
         
-        # 交易策略說明
+        # 交易策略說明 (從回測結果動態生成)
         f.write("## 📖 交易策略說明\n\n")
-        f.write("### HTF Fixed Exit (ML 推薦) ⭐\n")
-        f.write("- **進場**: 價格突破買入價\n")
-        f.write("- **出場**: **固定 2R 停利** 或 20 天時間出場\n")
-        f.write("- **預期**: 221% 年化報酬, Sharpe 2.88 (ML enhanced)\n\n")
-        f.write("### CUP Fixed Exit (ML 推薦) ⭐\n")
-        f.write("- **進場**: 價格突破買入價\n")
-        f.write("- **出場**: **固定 3R 停利** 或 20 天時間出場\n")
-        f.write("- **預期**: 138% 年化報酬, Sharpe 2.29 (ML enhanced)\n\n")
-        f.write("### ML 分數解讀\n")
-        f.write("- **≥ 0.5**: **Elite (頂級)** - 歷史回測 Sharpe ~3.0，極高勝率 ⭐\n")
-        f.write("- **0.4-0.5**: **Strong (強力)** - 適合標準操作，期望值高\n")
-        f.write("- **0.3-0.4**: **Moderate (普通)** - 僅供觀察，風險較高\n\n")
+        
+        # 從回測結果中找出最佳策略
+        if backtest_df is not None and not backtest_df.empty:
+            # HTF 最佳策略
+            htf_best = backtest_df[
+                (backtest_df['Strategy'].str.contains('HTF Fixed')) &
+                (backtest_df['ml_threshold'].notna())
+            ].nlargest(1, 'Ann. Return %')
+            
+            if not htf_best.empty:
+                htf_row = htf_best.iloc[0]
+                f.write(f"### HTF Fixed Exit (ML 推薦) ⭐\n")
+                f.write(f"- **進場**: 價格突破買入價\n")
+                f.write(f"- **出場**: **固定 2R 停利** 或 20 天時間出場\n")
+                f.write(f"- **預期**: {htf_row['Ann. Return %']:.1f}% 年化報酬, ")
+                f.write(f"Sharpe {htf_row['Sharpe']:.2f}, 勝率 {htf_row['Win Rate']:.1f}%\n")
+                f.write(f"- **ML閾值**: {htf_row['ml_threshold']}, 交易次數: {int(htf_row['Trades'])}\n\n")
+            
+            # CUP 最佳策略
+            cup_best = backtest_df[
+                (backtest_df['Strategy'].str.contains('CUP Fixed')) &
+                (backtest_df['ml_threshold'].notna())
+            ].nlargest(1, 'Ann. Return %')
+            
+            if not cup_best.empty:
+                cup_row = cup_best.iloc[0]
+                # 判斷是 R=2.0 還是 R=3.0
+                r_value = "3R" if "R=3.0" in cup_row['Strategy'] else "2R"
+                f.write(f"### CUP Fixed Exit (ML 推薦) ⭐\n")
+                f.write(f"- **進場**: 價格突破買入價\n")
+                f.write(f"- **出場**: **固定 {r_value} 停利** 或 20 天時間出場\n")
+                f.write(f"- **預期**: {cup_row['Ann. Return %']:.1f}% 年化報酬, ")
+                f.write(f"Sharpe {cup_row['Sharpe']:.2f}, 勝率 {cup_row['Win Rate']:.1f}%\n")
+                f.write(f"- **ML閾值**: {cup_row['ml_threshold']}, 交易次數: {int(cup_row['Trades'])}\n\n")
+        else:
+            # Fallback to hardcoded if backtest data not available
+            f.write("### HTF Fixed Exit (ML 推薦) ⭐\n")
+            f.write("- **進場**: 價格突破買入價\n")
+            f.write("- **出場**: **固定 2R 停利** 或 20 天時間出場\n")
+            f.write("- **預期**: 使用最新回測數據 (請執行 weekly_retrain.py)\n\n")
+            f.write("### CUP Fixed Exit (ML 推薦) ⭐\n")
+            f.write("- **進場**: 價格突破買入價\n")
+            f.write("- **出場**: **固定 3R 停利** 或 20 天時間出場\n")
+            f.write("- **預期**: 使用最新回測數據 (請執行 weekly_retrain.py)\n\n")
+        
+        f.write("### ML 分數解讀\n\n")
+        
+        # 從回測數據動態生成 ML 分數解讀
+        if backtest_df is not None and not backtest_df.empty:
+            # 找出各 ML 閾值的最佳 Sharpe
+            ml_05 = backtest_df[backtest_df['ml_threshold'] == 0.5]['Sharpe'].max()
+            ml_04 = backtest_df[backtest_df['ml_threshold'] == 0.4]['Sharpe'].max()
+            ml_03 = backtest_df[backtest_df['ml_threshold'] == 0.3]['Sharpe'].max()
+            
+            f.write(f"- **≥ 0.5**: **Elite (頂級)** - 歷史回測最佳 Sharpe {ml_05:.2f}，極高勝率 ⭐\n")
+            f.write(f"- **0.4-0.5**: **Strong (強力)** - 歷史回測最佳 Sharpe {ml_04:.2f}，適合標準操作\n")
+            f.write(f"- **0.3-0.4**: **Moderate (普通)** - 歷史回測最佳 Sharpe {ml_03:.2f}，僅供觀察\n\n")
+        else:
+            # Fallback
+            f.write("- **≥ 0.5**: **Elite (頂級)** - 高品質訊號 ⭐\n")
+            f.write("- **0.4-0.5**: **Strong (強力)** - 適合標準操作\n")
+            f.write("- **0.3-0.4**: **Moderate (普通)** - 僅供觀察\n\n")
     
     # 儲存 CSV (即使是空的也儲存)
     csv_path = os.path.join(output_dir, 'ml_signals.csv')

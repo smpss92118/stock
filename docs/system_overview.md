@@ -83,25 +83,33 @@
 
 - **相關目錄**: `ml_enhanced/`
 - **流程**:
-    1.  **模型訓練 (`weekly_retrain.py`)**: 每週執行，使用最新的歷史資料重新訓練機器學習模型。模型包含：
-        - **Stock Selector (股票篩選器)**: XGBoost 分類器，預測訊號是否為「高質量」(Winner)
+    1.  **模型訓練 (`weekly_retrain.py`)**: 每週執行，使用最新的歷史資料重新訓練機器學習模型。
+        - **NEW (v2.0)**: 訓練 **9 個獨立模型** (3 patterns × 3 exit modes)
+          - HTF: Fixed R=2.0, Fixed R=3.0, Trailing 1.5R
+          - CUP: Fixed R=2.0, Fixed R=3.0, Trailing 1.5R
+          - VCP: Fixed R=2.0, Fixed R=3.0, Trailing 1.5R
+        - **Stock Selector (股票篩選器)**: 每種組合訓練獨立的 XGBoost 分類器
           - 基於 24 個特徵（型態品質、技術指標、市場環境等）
+          - 預測該訊號使用特定出場方式的勝率
           - 決策門檻：ML 分數 ≥ 0.4（勝率 70-78%）
-        - **Position Sizer (倉位分配器)**: XGBoost 回歸器，預測訊號的預期報酬率
-          - 目前未實施於每日掃描，保留作為未來動態倉位調整之用
+        
     2.  **每日預測 (`daily_ml_scanner.py`)**:
-        - 載入當日由 `run_daily_scan.py` 產生的基本訊號。
-        - 即時計算 24 個 ML 特徵。
-        - 使用 Stock Selector 模型進行預測，得到 ML 勝率分數 (0.0 - 1.0)。
+        - 載入當日由 `run_daily_scan.py` 產生的基本訊號
+        - 即時計算 24 個 ML 特徵
+        - **NEW**: 使用 9 個模型預測所有出場方式的勝率
+        - **智能推薦**: 自動選擇 ML 分數最高的出場策略
         - **訊號分類**：
           - ✅ **ML 推薦訊號** (ML ≥ 0.4): 高品質，推薦交易
+            - 顯示推薦出場策略 (例如: Fixed R=2.0)
+            - 顯示所有 3 種策略的 ML 分數
           - 📋 **原始訊號** (ML < 0.4): 供參考，自行評估
-        - 產出經過 ML 增強後的每日報告，存放於 `ml_enhanced/daily_reports/`。
+        - 產出經過 ML 增強後的每日報告，存放於 `ml_enhanced/daily_reports/`
 
-**ML 增強效果**:
-- CUP R=2.0 (ML 0.5): 年化報酬 **146.7%**, Sharpe **3.13**, 勝率 **74.6%**
-- vs 原始 CUP R=2.0 (無 ML): 年化 152.5%, Sharpe 2.31, 勝率 56.7%
-- **結論**: ML 過濾提升勝率 +18%，Sharpe Ratio +35%，適合追求穩健報酬的投資人
+**ML 增強效果** (最新回測 2025-11-22):
+- HTF Fixed R=2.0 (ML 0.4): 年化報酬 **156.0%**, Sharpe **2.59**, 勝率 **60.2%**
+- HTF Fixed R=2.0 (ML 0.5): 年化報酬 **145.7%**, Sharpe **2.62**, 勝率 **62.8%**
+- CUP Fixed R=3.0 (ML 0.5): 年化報酬 **129.7%**, Sharpe **2.09**, 勝率 **74.4%**
+- **結論**: ML 智能選擇出場策略，最大化每個訊號的潛力
 
 > 關於機器學習模型的邏輯，請參考：[ML 邏輯說明](./ml/system_logic.md)
 

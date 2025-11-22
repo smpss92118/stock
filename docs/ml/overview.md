@@ -9,9 +9,10 @@
 2. **ML 過濾**: 使用 XGBoost 模型預測每個訊號的勝率，只保留高品質訊號。
 3. **允許 Pyramiding**: 同一股票可多次進場，捕捉超級股票的機會。
 
-**最新績效** (2025-11-21):
-- 🏆 **CUP R=2.0 (ML 0.5)**: 年化 146.7%, Sharpe **3.13**, 勝率 74.6%
-- 🚀 **HTF Trailing**: 年化 151.2%, Sharpe 1.19, 勝率 38.7%
+**最新績效** (2025-11-22):
+- 🏆 **HTF Fixed R=2.0 (ML 0.4)**: 年化 156.0%, Sharpe **2.59**, 勝率 60.2%
+- 🏆 **HTF Fixed R=2.0 (ML 0.5)**: 年化 145.7%, Sharpe **2.62**, 勝率 62.8%
+- 🚀 **CUP Fixed R=3.0 (ML 0.5)**: 年化 129.7%, Sharpe **2.09**, 勝率 74.4%
 
 ---
 
@@ -22,18 +23,26 @@ ml_enhanced/
 ├── daily_ml_scanner.py    # [核心] 每日 ML 掃描器 (Crontab 19:05)
 ├── weekly_retrain.py      # [核心] 每週模型再訓練 (Crontab Sun 02:00)
 ├── scripts/
-│   ├── prepare_ml_data.py # 特徵工程 (使用 src.ml.features)
-│   ├── train_models.py    # 模型訓練 (XGBoost)
-│   ├── run_ml_backtest.py # [NEW] ML 回測系統
+│   ├── prepare_ml_data.py # 特徵工程 (多出場方式)
+│   ├── train_models.py    # 模型訓練 (9 個 XGBoost 模型)
+│   ├── run_ml_backtest.py # ML 回測系統
 ├── models/
-│   ├── stock_selector.pkl # 股票選擇模型 (XGBoost Classifier)
+│   ├── stock_selector_cup_fixed_r2_t20.pkl
+│   ├── stock_selector_cup_fixed_r3_t20.pkl
+│   ├── stock_selector_cup_trailing_15r.pkl
+│   ├── stock_selector_htf_fixed_r2_t20.pkl
+│   ├── stock_selector_htf_fixed_r3_t20.pkl
+│   ├── stock_selector_htf_trailing_15r.pkl
+│   ├── stock_selector_vcp_fixed_r2_t20.pkl
+│   ├── stock_selector_vcp_fixed_r3_t20.pkl
+│   ├── stock_selector_vcp_trailing_15r.pkl
 │   └── feature_info.pkl   # 特徵元數據
 ├── daily_reports/         # 每日生成的 ML 報告
 │   └── YYYY-MM-DD/
 │       ├── ml_daily_summary.md
 │       └── ml_signals.csv
 ├── data/                  # 訓練數據
-│   └── ml_features.csv
+│   └── ml_features.csv    # 含 exit_mode 欄位
 ```
 
 > **文檔位置**: ML 相關說明集中於 `docs/ml/`（本文件與 `system_logic.md`）。排程/手動執行請見 `docs/operations.md`。  
@@ -46,14 +55,15 @@ ml_enhanced/
 ### 1. 每日掃描 (`daily_ml_scanner.py`)
 - **功能**: 執行每日掃描，並應用 ML 模型過濾。
 - **輸入**: 每日股價數據
-- **輸出**: `ml_daily_summary.md` (包含 ML 推薦訊號與原始訊號對比)
+- **輸出**: `ml_daily_summary.md` (包含 ML 推薦訊號與推薦出場策略)
 - **邏輯**:
     1. 執行原始掃描 (HTF/CUP/VCP)
-    2. 載入 ML 模型 (`stock_selector.pkl`)
+    2. 載入 9 個 ML 模型
     3. 為每個訊號計算 ML 特徵
-    4. 預測勝率 (Probability)
-    5. 載入最新回測結果（包含 Avg Holding, MDD, 連勝/連敗等指標）
-    6. 生成報告（推薦 Prob ≥ 0.4 的訊號）
+    4. **NEW**: 預測 3 種出場方式的勝率
+    5. **智能選擇**: 推薦 ML 分數最高的策略
+    6. 載入最新回測結果
+    7. 生成報告（推薦 Prob ≥ 0.4 的訊號）
 
 ### 2. 每週再訓練 (`weekly_retrain.py`)
 - **功能**: 每週使用最新數據重新訓練模型，確保模型適應市場變化。
@@ -82,10 +92,11 @@ ml_enhanced/
     - **型態專屬 (1)**: `consolidation_days`
     - **訊號密度 (2, placeholder)**: `signal_count_ma10`, `signal_count_ma60`
 - **決策閾值**: Probability ≥ 0.4
-- **績效** (2025-11-21 更新):
-    - ROC AUC: ~0.73
+- **績效** (2025-11-22 更新):
+    - **9 個模型 ROC AUC 範圍**: 0.55 - 0.63
+    - HTF 模型表現最佳 (AUC > 0.62)
     - 準確率: ~75% (在 0.4 閉值下)
-    - 回測驗證: CUP R=2.0 (ML 0.5) 年化 146.7%, Sharpe 3.13
+    - 回測驗證: HTF Fixed R=2.0 (ML 0.4) 年化 156.0%, Sharpe 2.59
 
 > 📘 **詳細特徵說明**: 查看 [ML 邏輯完整文檔](./system_logic.md) 了解每個特徵的計算方式和來源
 
@@ -120,6 +131,6 @@ stock/.venv/bin/python ml_enhanced/weekly_retrain.py
 
 ---
 
-**最後更新**: 2025-11-21  
-**版本**: 2.0  
-**關鍵改進**: 移除 No Pyramiding 限制、30天追蹤窗口、完整 TPEX 數據源、新增回測指標
+**最後更新**: 2025-11-22  
+**版本**: 2.0 (Multi-Exit ML System)  
+**關鍵改進**: 9 個模型 (3 patterns × 3 exits)、智能出場選擇、報告動態更新
