@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-11-23T00:11:58.804990",
+  "ml_enhanced": {
+    "total_trades": 48,
+    "avg_return_pct": 0,
+    "win_rate_pct": 0,
+    "max_return_pct": 0,
+    "min_return_pct": 0
+  },
+  "catboost_enhanced": {
+    "total_combinations": 9,
+    "avg_annual_return_pct": 174.94444444444446,
+    "avg_win_rate_pct": 66.21111111111111,
+    "best_annual_return_pct": 364.5,
+    "worst_annual_return_pct": 44.5
+  },
+  "comparison": {}
+}

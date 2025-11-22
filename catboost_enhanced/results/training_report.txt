@@ -1,0 +1,35 @@
+Test Accuracy: 0.3886
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.44      0.68      0.53      1877
+           1       0.30      0.16      0.21      1282
+           2       0.35      0.44      0.39      1135
+           3       0.36      0.18      0.24      1458
+
+    accuracy                           0.39      5752
+   macro avg       0.36      0.36      0.34      5752
+weighted avg       0.37      0.39      0.36      5752
+
+Top Features:
+                   feature  importance
+60            pattern_type   19.051699
+59               atr_ratio   11.237165
+8                 cup_days   10.904603
+1                       dd    4.518931
+43                vol_ma20    3.999092
+44                vol_ma50    3.755302
+12            foreign_sell    3.682912
+9                     ma20    3.393140
+11             foreign_buy    3.374809
+4                    close    3.061763
+7                 htf_days    3.018734
+28   investment_net_sum_5d    2.465810
+58              volatility    2.344382
+3                      low    2.310816
+32  investment_net_sum_10d    2.289602
+37      dealer_net_sum_20d    2.028514
+52           price_vs_ma50    1.930843
+2                     high    1.924308
+35     foreign_net_sum_20d    1.898326
+14          investment_buy    1.658056

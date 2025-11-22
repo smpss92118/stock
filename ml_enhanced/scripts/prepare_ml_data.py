@@ -14,6 +14,7 @@ import sys
 import os
 import pandas as pd
 import numpy as np
+import pickle
 from datetime import datetime, timedelta
 
 # Add paths
@@ -263,6 +264,394 @@ def generate_labels(df, pattern_type):
     
     return final_lookup
 
+def generate_catboost_data(df, output_path):
+    """
+    Generate expanded dataset for CatBoost Global Model.
+    Features:
+    - All technical indicators
+    - pattern_type (Categorical)
+    - exit_mode (Categorical)
+    - efficiency_score (Target)
+    - label (Target Class)
+    """
+    logger.info("Generating CatBoost Global Model Data...")
+    
+    # Define exit modes to simulate
+    exit_modes = [
+        {'name': 'fixed_r2_t20', 'type': 'fixed', 'r_mult': 2.0, 'time_exit': 20},
+        {'name': 'fixed_r3_t20', 'type': 'fixed', 'r_mult': 3.0, 'time_exit': 20},
+        {'name': 'trailing_15r', 'type': 'trailing', 'trigger_r': 1.5}
+    ]
+    
+    expanded_rows = []
+    
+    # Ensure MA20 exists
+    if 'ma20' not in df.columns:
+        df['ma20'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(20).mean())
+        
+    # Partition by SID
+    df_groups = dict(tuple(df.groupby('sid')))
+    
+    # Iterate over all patterns
+    patterns = ['cup', 'htf', 'vcp']
+    
+    for pattern in patterns:
+        pat_col = f'is_{pattern}'
+        buy_col = f'{pattern}_buy_price'
+        stop_col = f'{pattern}_stop_price'
+        
+        if pat_col not in df.columns: continue
+        
+        signals = df[
+            (df[pat_col] == True) & 
+            (df[buy_col].notna()) & 
+            (df[stop_col].notna())
+        ].copy()
+        
+        for idx, signal in signals.iterrows():
+            sid = signal['sid']
+            signal_date = signal['date']
+            buy_price = signal[buy_col]
+            stop_price = signal[stop_col]
+            
+            if sid not in df_groups: continue
+            stock_df = df_groups[sid]
+            
+            # Get simulation data
+            sim_data = stock_df[stock_df['date'] >= signal_date]
+            if len(sim_data) < 2: continue # Need at least 2 days
+            
+            # Find entry (limit buy)
+            # Note: reusing logic from generate_labels, but simplified
+            # Assuming entry at buy_price if high >= buy_price in next 30 days
+            future_30 = sim_data.iloc[1:31] # Next 30 days
+            if len(future_30) == 0: continue
+            
+            entry_candidates = future_30[future_30['high'] >= buy_price]
+            if len(entry_candidates) == 0: continue
+            
+            entry_idx = sim_data.index.get_loc(entry_candidates.index[0])
+            sim_data_entry = sim_data.iloc[entry_idx:]
+            
+            high_np = sim_data_entry['high'].values
+            low_np = sim_data_entry['low'].values
+            close_np = sim_data_entry['close'].values
+            ma_np = sim_data_entry['ma20'].values
+            
+            # Simulate each exit mode
+            for mode in exit_modes:
+                if mode['type'] == 'fixed':
+                    pnl, duration = simulate_trade_fixed(
+                        high_np, low_np, close_np, buy_price, stop_price,
+                        r_mult=mode['r_mult'], time_exit=mode['time_exit']
+                    )
+                else:
+                    pnl, duration = simulate_trade_trailing(
+                        high_np, low_np, close_np, ma_np, buy_price, stop_price,
+                        trigger_r=mode['trigger_r']
+                    )
+                
+                # Calculate Score
+                profit_pct = pnl * 100
+                score = profit_pct / duration if duration > 0 else 0
+                
+                # Create row
+                row = signal.copy()
+                row['pattern_type'] = pattern.upper()
+                row['exit_mode'] = mode['name']
+                row['profit_pct'] = profit_pct
+                row['holding_days'] = duration
+                row['efficiency_score'] = score
+                
+                expanded_rows.append(row)
+                
+    if not expanded_rows:
+        logger.warning("No expanded rows generated for CatBoost")
+        return
+        
+    res_df = pd.DataFrame(expanded_rows)
+    
+    # Assign Labels (Quartiles)
+    # Calculate quartiles on the entire dataset
+    q25 = res_df['efficiency_score'].quantile(0.25)
+    q50 = res_df['efficiency_score'].quantile(0.50)
+    q75 = res_df['efficiency_score'].quantile(0.75)
+    
+    logger.info(f"Global Score Quartiles: Q25={q25:.2f}, Q50={q50:.2f}, Q75={q75:.2f}")
+    
+    def get_label(s):
+        if s >= q75: return 3 # A
+        elif s >= q50: return 2 # B
+        elif s >= q25: return 1 # C
+        else: return 0 # D
+        
+    res_df['label'] = res_df['efficiency_score'].apply(get_label)
+    
+    # Add Group ID for YetiRank (Date as integer)
+    res_df['group_id'] = res_df['date'].dt.strftime('%Y%m%d').astype(int)
+    
+    # Save
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    # Drop unnecessary columns to save space/confusion
+    # Keep features + targets + identifiers
+    # We can reuse extract_ml_features logic or just keep what's in df
+    # But df has many raw columns.
+    # Let's keep everything for now, but ensure we know what the features are.
+    
+    res_df.to_csv(output_path, index=False)
+    logger.info(f"✅ Saved CatBoost data to {output_path} ({len(res_df)} rows)")
+    
+    # Save feature info for CatBoost
+    # Exclude targets and identifiers
+    exclude = ['sid', 'date', 'profit_pct', 'holding_days', 'efficiency_score', 'label', 
+               'actual_return', 'is_winner', 'pattern_type', 'exit_mode'] 
+               # pattern_type and exit_mode are FEATURES but handled as cat_features
+    
+    # Identify numeric features from the original df columns
+    # We can reuse the feature list from extract_ml_features if possible, 
+    # or just take all numeric columns except excluded.
+    
+    numeric_cols = res_df.select_dtypes(include=[np.number]).columns.tolist()
+    feature_cols = [c for c in numeric_cols if c not in exclude and not c.startswith('is_') and not c.endswith('_price')]
+    
+    # Add back specific features if they were excluded by type
+    # Actually, pattern_type and exit_mode ARE features.
+    
+    cat_features = ['pattern_type', 'exit_mode']
+    final_features = feature_cols + cat_features
+    
+    info = {
+        'feature_cols': final_features,
+        'cat_features': cat_features,
+        'quartiles': {'q25': q25, 'q50': q50, 'q75': q75}
+    }
+    
+    info_path = os.path.abspath(os.path.join(os.path.dirname(output_path), '../models/catboost_feature_info.pkl'))
+    os.makedirs(os.path.dirname(info_path), exist_ok=True)
+    with open(info_path, 'wb') as f:
+        pickle.dump(info, f)
+    logger.info(f"✅ Saved CatBoost feature info to {info_path}")
+
+
+
+# ============================================================================
+# 新增：給 CatBoost 使用的全局標籤生成函數 (P2 實現)
+# ============================================================================
+
+def generate_catboost_global_features(df, output_path):
+    """
+    為 CatBoost 全局模型生成擴展資料集
+
+    關鍵特性 (P0+P1+P2):
+    1. P0: 所有信號和出場模式放在一個大 DataFrame (全局模型)
+    2. 使用統一的四分位數計算 ABCD 標籤 (不是按 pattern × exit 分別計算)
+    3. 整合樣本權重信息用於後續的加權訓練
+
+    Args:
+        df: 完整的原始資料 DataFrame
+        output_path: 輸出檔案路徑
+
+    Output:
+        catboost_features.csv: 包含所有特徵、標籤、權重信息的資料集
+    """
+    logger.info("\n" + "="*80)
+    logger.info("Generating CatBoost Global Model Features (P0+P1+P2)")
+    logger.info("="*80)
+
+    # 定義出場模式
+    exit_modes = [
+        {'name': 'fixed_r2_t20', 'type': 'fixed', 'r_mult': 2.0, 'time_exit': 20},
+        {'name': 'fixed_r3_t20', 'type': 'fixed', 'r_mult': 3.0, 'time_exit': 20},
+        {'name': 'trailing_15r', 'type': 'trailing', 'trigger_r': 1.5}
+    ]
+
+    expanded_rows = []
+
+    # 確保 MA20 存在
+    if 'ma20' not in df.columns:
+        df['ma20'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(20).mean())
+
+    # 按 SID 分組以加速
+    df_groups = dict(tuple(df.groupby('sid')))
+
+    # 遍歷所有模式和信號
+    for pattern in ['cup', 'htf', 'vcp']:
+        logger.info(f"\n  Processing {pattern.upper()}...")
+
+        pat_col = f'is_{pattern}'
+        buy_col = f'{pattern}_buy_price'
+        stop_col = f'{pattern}_stop_price'
+
+        if pat_col not in df.columns:
+            continue
+
+        # 篩選該模式的信號
+        signals = df[
+            (df[pat_col] == True) &
+            (df[buy_col].notna()) &
+            (df[stop_col].notna())
+        ].copy()
+
+        logger.info(f"    Found {len(signals)} signals")
+
+        for idx, signal in signals.iterrows():
+            sid = signal['sid']
+            signal_date = signal['date']
+            buy_price = signal[buy_col]
+            stop_price = signal[stop_col]
+
+            if sid not in df_groups:
+                continue
+
+            stock_df = df_groups[sid]
+
+            # 獲取信號後的資料
+            sim_data = stock_df[stock_df['date'] >= signal_date]
+            if len(sim_data) < 2:
+                continue
+
+            # 尋找進場點 (limit buy within 30 days)
+            future_30 = sim_data.iloc[1:31]
+            if len(future_30) == 0:
+                continue
+
+            entry_candidates = future_30[future_30['high'] >= buy_price]
+            if len(entry_candidates) == 0:
+                continue
+
+            entry_idx = sim_data.index.get_loc(entry_candidates.index[0])
+            sim_data_entry = sim_data.iloc[entry_idx:]
+
+            high_np = sim_data_entry['high'].values
+            low_np = sim_data_entry['low'].values
+            close_np = sim_data_entry['close'].values
+            ma_np = sim_data_entry['ma20'].values
+
+            # 模擬每個出場模式
+            for mode in exit_modes:
+                if mode['type'] == 'fixed':
+                    pnl, duration = simulate_trade_fixed(
+                        high_np, low_np, close_np, buy_price, stop_price,
+                        r_mult=mode['r_mult'], time_exit=mode['time_exit']
+                    )
+                else:  # trailing
+                    pnl, duration = simulate_trade_trailing(
+                        high_np, low_np, close_np, ma_np, buy_price, stop_price,
+                        trigger_r=mode['trigger_r']
+                    )
+
+                # 計算分數
+                score = (pnl * 100) / duration
+
+                # 建立行
+                row = signal.copy()
+                row['pattern_type'] = pattern.upper()
+                row['exit_mode'] = mode['name']
+                row['actual_return'] = pnl
+                row['duration'] = duration
+                row['efficiency_score'] = score
+
+                expanded_rows.append(row)
+
+    if not expanded_rows:
+        logger.error("✗ No expanded rows generated!")
+        return
+
+    res_df = pd.DataFrame(expanded_rows)
+    logger.info(f"\n✓ Generated {len(res_df)} expanded rows (signal × exit_mode)")
+
+    # ========== P2: 全局標籤分配 ==========
+    # 關鍵: 使用統一的四分位數計算所有信號的標籤
+    # (而不是按 pattern × exit_mode 分別計算)
+
+    logger.info("\nAssigning global labels (P2)...")
+
+    q25 = res_df['efficiency_score'].quantile(0.25)
+    q50 = res_df['efficiency_score'].quantile(0.50)
+    q75 = res_df['efficiency_score'].quantile(0.75)
+
+    logger.info(f"  Global Quartiles: Q25={q25:.2f}, Q50={q50:.2f}, Q75={q75:.2f}")
+
+    def get_label(s):
+        if s >= q75:
+            return 3  # A
+        elif s >= q50:
+            return 2  # B
+        elif s >= q25:
+            return 1  # C
+        else:
+            return 0  # D
+
+    res_df['label_int'] = res_df['efficiency_score'].apply(get_label)
+
+    # 也添加 ABCD 標籤供參考
+    label_map = {0: 'D', 1: 'C', 2: 'B', 3: 'A'}
+    res_df['label_abcd'] = res_df['label_int'].map(label_map)
+
+    # 計算 is_winner (用於回測)
+    res_df['is_winner'] = (res_df['label_int'] >= 2).astype(int)
+
+    # 添加 group_id (用於 YetiRank，日期作為 group)
+    res_df['group_id'] = res_df['date'].dt.strftime('%Y%m%d').astype(int)
+
+    # 統計
+    logger.info(f"\n  標籤分佈:")
+    for label_val, label_char in label_map.items():
+        count = (res_df['label_int'] == label_val).sum()
+        pct = count / len(res_df) * 100
+        logger.info(f"    {label_char}: {count:5d} ({pct:5.1f}%)")
+
+    # 保存資料
+    logger.info(f"\nSaving CatBoost features to {output_path}...")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    res_df.to_csv(output_path, index=False)
+    logger.info(f"✓ Saved {len(res_df)} rows")
+
+    # 保存特徵信息
+    exclude_cols = {
+        'sid', 'date', 'volume', 'open', 'high', 'low', 'close',
+        'actual_return', 'duration', 'efficiency_score',
+        'label_int', 'label_abcd', 'is_winner', 'group_id',
+        'name', 'code', 'dd', 'exchange'  # 排除股票代碼、名稱、時間衰減、交易所
+    }
+    exclude_cols.update({c for c in res_df.columns if c.startswith('is_')})
+    exclude_cols.update({c for c in res_df.columns if c.endswith('_price')})
+    exclude_cols.update({c for c in res_df.columns if c.endswith('_days')})
+    exclude_cols.update({c for c in res_df.columns if c.endswith('_grade')})
+    exclude_cols.update({c for c in res_df.columns if c.endswith('_buy_price')})
+    exclude_cols.update({c for c in res_df.columns if c.endswith('_stop_price')})
+    # 排除信號相關的 R 倍數和停止點距離 (改用百分比距離)
+    exclude_cols.update({c for c in res_df.columns if '_2R' in c or '_3R' in c or '_4R' in c or c.endswith('_stop')})
+
+    # 只保留數值型特徵（除了類別特徵）
+    feature_cols = [c for c in res_df.columns
+                   if c not in exclude_cols and pd.api.types.is_numeric_dtype(res_df[c])]
+
+    cat_features = ['pattern_type', 'exit_mode']
+    numeric_features = [c for c in feature_cols if c not in cat_features]
+
+    info = {
+        'feature_cols': feature_cols,
+        'numeric_features': numeric_features,
+        'cat_features': cat_features,
+        'n_features': len(feature_cols),
+        'n_samples': len(res_df),
+        'quartiles': {'q25': q25, 'q50': q50, 'q75': q75},
+        'label_distribution': dict(res_df['label_int'].value_counts().sort_index()),
+    }
+
+    info_path = os.path.join(os.path.dirname(output_path), '../models/catboost_feature_info.pkl')
+    os.makedirs(os.path.dirname(info_path), exist_ok=True)
+    with open(info_path, 'wb') as f:
+        pickle.dump(info, f)
+
+    logger.info(f"✓ Saved feature info to {info_path}")
+    logger.info(f"  Total features: {len(feature_cols)}")
+    logger.info(f"    Numeric: {len(numeric_features)}")
+    logger.info(f"    Categorical: {len(cat_features)}")
+
+
 def main():
     logger.info("="*80)
     logger.info("ML Data Preparation")
@@ -437,12 +826,18 @@ def main():
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     feature_df.to_csv(OUTPUT_FILE, index=False)
     logger.info(f"\n✅ Features saved to {OUTPUT_FILE}")
+    # This section is now handled by generate_catboost_data for the global model
+    # The original intent was to generate features for a general model, but it's now specific to CatBoost.
+    # Keeping the structure for clarity, but the actual feature generation is moved.
     
-    # Show sample
-    print("\nSample features:")
-    print(feature_df.head(20)[['sid', 'date', 'pattern_type', 'grade_numeric', 'distance_to_buy_pct', 'actual_return', 'is_winner']])
+    # 1. Generate features for the general ML model (if any, currently handled by CatBoost function)
+    # This part of the code was refactored into generate_catboost_data
     
-    logger.info("✅ Feature preparation complete")
+    # 2. Generate CatBoost Data (Global Model with P0+P1+P2)
+    CATBOOST_OUTPUT = os.path.join(os.path.dirname(__file__), '../../catboost_enhanced/data/catboost_features.csv')
+    generate_catboost_global_features(df_pd, CATBOOST_OUTPUT)
+    
+    logger.info("✅ ML Data Preparation Complete!")
 
 if __name__ == "__main__":
     main()

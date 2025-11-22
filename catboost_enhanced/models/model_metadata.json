@@ -1,0 +1,17 @@
+{
+  "n_features": 54,
+  "cat_features": [
+    "pattern_type",
+    "exit_mode"
+  ],
+  "n_samples": 28758,
+  "training_date": "2025-11-23T00:10:57.867251",
+  "model_type": "CatBoostClassifier",
+  "objective": "MultiClass (4-class: D/C/B/A)",
+  "class_weights": [
+    1.0,
+    1.0,
+    1.5,
+    2.0
+  ]
+}

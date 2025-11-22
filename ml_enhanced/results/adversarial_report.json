@@ -5,47 +5,47 @@
     "train_end": "2023-10-18",
     "test_start": "2023-10-19",
     "test_end": "2023-11-17",
-    "auc": 0.999991306464513,
+    "auc": 1.0,
     "top_features": [
       {
+        "feature": "ma_trend",
+        "importance": 0.5375159382820129
+      },
+      {
+        "feature": "consolidation_days",
+        "importance": 0.0475483313202858
+      },
+      {
+        "feature": "price_vs_ma50",
+        "importance": 0.036705974489450455
+      },
+      {
         "feature": "volume_ratio_ma50",
-        "importance": 0.24048572778701782
+        "importance": 0.03267432749271393
+      },
+      {
+        "feature": "price_vs_ma20",
+        "importance": 0.030740318819880486
       },
       {
         "feature": "momentum_20d",
-        "importance": 0.09133195877075195
-      },
-      {
-        "feature": "volume_ratio_ma20",
-        "importance": 0.07398127019405365
-      },
-      {
-        "feature": "grade_numeric",
-        "importance": 0.04035723954439163
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.038926996290683746
-      },
-      {
-        "feature": "total_net_lag1",
-        "importance": 0.037291985005140305
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.03623626008629799
-      },
-      {
-        "feature": "volume_trend_5d",
-        "importance": 0.03355243429541588
+        "importance": 0.022969558835029602
       },
       {
         "feature": "rsi_14",
-        "importance": 0.03263052925467491
+        "importance": 0.020144397392868996
       },
       {
-        "feature": "foreign_net_sum_5d",
-        "importance": 0.030122697353363037
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.01838243193924427
+      },
+      {
+        "feature": "foreign_net_sum_10d",
+        "importance": 0.017806781455874443
+      },
+      {
+        "feature": "volume_ratio_ma20",
+        "importance": 0.017601819708943367
       }
     ]
   },
@@ -55,47 +55,47 @@
     "train_end": "2023-11-17",
     "test_start": "2023-11-20",
     "test_end": "2023-12-18",
-    "auc": 0.996258427454118,
+    "auc": 0.9991595804724956,
     "top_features": [
       {
+        "feature": "ma_trend",
+        "importance": 0.1296684592962265
+      },
+      {
+        "feature": "consolidation_days",
+        "importance": 0.09583070129156113
+      },
+      {
+        "feature": "price_vs_ma50",
+        "importance": 0.0717645138502121
+      },
+      {
         "feature": "volume_ratio_ma50",
-        "importance": 0.14321966469287872
+        "importance": 0.04578431323170662
       },
       {
         "feature": "momentum_20d",
-        "importance": 0.06912290304899216
+        "importance": 0.03934101387858391
+      },
+      {
+        "feature": "atr_ratio",
+        "importance": 0.03770909458398819
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.033720385283231735
+      },
+      {
+        "feature": "grade_numeric",
+        "importance": 0.03041655942797661
       },
       {
         "feature": "total_net_sum_3d",
-        "importance": 0.04571482166647911
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.043870918452739716
-      },
-      {
-        "feature": "foreign_net_lag1",
-        "importance": 0.039465416222810745
+        "importance": 0.029761597514152527
       },
       {
         "feature": "total_net_sum_20d",
-        "importance": 0.038016993552446365
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.03797012194991112
-      },
-      {
-        "feature": "volume_ratio_ma20",
-        "importance": 0.03756892681121826
-      },
-      {
-        "feature": "foreign_net_sum_5d",
-        "importance": 0.03717152401804924
-      },
-      {
-        "feature": "distance_to_buy_pct",
-        "importance": 0.035827185958623886
+        "importance": 0.027811899781227112
       }
     ]
   },
@@ -105,47 +105,47 @@
     "train_end": "2023-12-18",
     "test_start": "2023-12-19",
     "test_end": "2024-01-18",
-    "auc": 0.9746254875208445,
+    "auc": 0.9900724907319359,
     "top_features": [
       {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.05910203605890274
+        "feature": "ma_trend",
+        "importance": 0.07355941087007523
       },
       {
-        "feature": "momentum_20d",
-        "importance": 0.055593959987163544
+        "feature": "price_vs_ma20",
+        "importance": 0.0583534874022007
       },
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.046116653829813004
+        "feature": "price_vs_ma50",
+        "importance": 0.05762428045272827
       },
       {
-        "feature": "rsi_14",
-        "importance": 0.044781118631362915
+        "feature": "consolidation_days",
+        "importance": 0.05740961804986
       },
       {
-        "feature": "dealer_net_lag1",
-        "importance": 0.04412980377674103
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.04401408135890961
-      },
-      {
-        "feature": "total_net_sum_3d",
-        "importance": 0.04386913403868675
-      },
-      {
-        "feature": "investment_net_lag1",
-        "importance": 0.043096303939819336
+        "feature": "atr_ratio",
+        "importance": 0.05241594836115837
       },
       {
         "feature": "distance_to_buy_pct",
-        "importance": 0.042708802968263626
+        "importance": 0.040870849043130875
       },
       {
-        "feature": "total_net_sum_20d",
-        "importance": 0.040420856326818466
+        "feature": "volume_ratio_ma50",
+        "importance": 0.03943949192762375
+      },
+      {
+        "feature": "rsi_14",
+        "importance": 0.03907952830195427
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.03815291076898575
+      },
+      {
+        "feature": "momentum_20d",
+        "importance": 0.038109757006168365
       }
     ]
   },
@@ -155,47 +155,47 @@
     "train_end": "2024-01-18",
     "test_start": "2024-01-19",
     "test_end": "2024-02-16",
-    "auc": 0.9870077593081028,
+    "auc": 0.9947191467828008,
     "top_features": [
       {
-        "feature": "momentum_5d",
-        "importance": 0.06966640055179596
+        "feature": "ma_trend",
+        "importance": 0.12445324659347534
       },
       {
-        "feature": "volume_surge",
-        "importance": 0.05494727939367294
+        "feature": "price_vs_ma20",
+        "importance": 0.0721028745174408
       },
       {
-        "feature": "distance_to_buy_pct",
-        "importance": 0.05222772806882858
+        "feature": "atr_ratio",
+        "importance": 0.048650436103343964
       },
       {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04600085690617561
+        "feature": "volatility",
+        "importance": 0.0456249937415123
+      },
+      {
+        "feature": "price_vs_ma50",
+        "importance": 0.041732270270586014
+      },
+      {
+        "feature": "consolidation_days",
+        "importance": 0.04059065133333206
       },
       {
         "feature": "total_net_sum_20d",
-        "importance": 0.04448992758989334
-      },
-      {
-        "feature": "total_net_sum_3d",
-        "importance": 0.04234180599451065
-      },
-      {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.04139912128448486
+        "importance": 0.03465832397341728
       },
       {
         "feature": "risk_pct",
-        "importance": 0.04137035086750984
+        "importance": 0.03285429999232292
       },
       {
-        "feature": "total_net_lag1",
-        "importance": 0.03875918686389923
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.03267666697502136
       },
       {
-        "feature": "rsi_14",
-        "importance": 0.038201384246349335
+        "feature": "volume_surge",
+        "importance": 0.03165415674448013
       }
     ]
   },
@@ -205,47 +205,47 @@
     "train_end": "2024-02-16",
     "test_start": "2024-02-19",
     "test_end": "2024-03-18",
-    "auc": 0.9858340904887875,
+    "auc": 0.9951973562543721,
     "top_features": [
       {
-        "feature": "grade_numeric",
-        "importance": 0.06312745809555054
+        "feature": "atr_ratio",
+        "importance": 0.06730760633945465
       },
       {
-        "feature": "risk_pct",
-        "importance": 0.060308244079351425
+        "feature": "volatility",
+        "importance": 0.06051844358444214
       },
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.04954471439123154
+        "feature": "consolidation_days",
+        "importance": 0.0521252267062664
       },
       {
-        "feature": "momentum_20d",
-        "importance": 0.04859648644924164
-      },
-      {
-        "feature": "momentum_5d",
-        "importance": 0.04458927363157272
-      },
-      {
-        "feature": "total_net_sum_5d",
-        "importance": 0.04180589318275452
+        "feature": "ma_trend",
+        "importance": 0.04132615774869919
       },
       {
         "feature": "total_net_sum_20d",
-        "importance": 0.04153163731098175
+        "importance": 0.03700210526585579
       },
       {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04115717485547066
+        "feature": "total_net_lag1",
+        "importance": 0.036291010677814484
+      },
+      {
+        "feature": "risk_pct",
+        "importance": 0.03591488301753998
+      },
+      {
+        "feature": "foreign_net_to_vol_lag1",
+        "importance": 0.03550935164093971
       },
       {
         "feature": "foreign_investment_spread_lag1",
-        "importance": 0.040972065180540085
+        "importance": 0.034095149487257004
       },
       {
-        "feature": "foreign_net_lag1",
-        "importance": 0.040862634778022766
+        "feature": "total_net_sum_10d",
+        "importance": 0.03390096127986908
       }
     ]
   },
@@ -255,47 +255,47 @@
     "train_end": "2024-03-18",
     "test_start": "2024-03-19",
     "test_end": "2024-04-18",
-    "auc": 0.9872268212504498,
+    "auc": 0.9925920765817561,
     "top_features": [
       {
+        "feature": "consolidation_days",
+        "importance": 0.1280205249786377
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.04554884135723114
+      },
+      {
+        "feature": "price_vs_ma50",
+        "importance": 0.04503218084573746
+      },
+      {
         "feature": "risk_pct",
-        "importance": 0.05960850045084953
-      },
-      {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.055205538868904114
-      },
-      {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.050646014511585236
-      },
-      {
-        "feature": "total_net_sum_5d",
-        "importance": 0.04991225153207779
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04864409193396568
-      },
-      {
-        "feature": "volume_trend_5d",
-        "importance": 0.04703107848763466
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.04454820975661278
+        "importance": 0.042068034410476685
       },
       {
         "feature": "momentum_20d",
-        "importance": 0.04427430406212807
+        "importance": 0.03959709405899048
       },
       {
-        "feature": "total_net_sum_3d",
-        "importance": 0.04250723868608475
+        "feature": "foreign_investment_spread_lag1",
+        "importance": 0.03880677744746208
       },
       {
-        "feature": "foreign_net_sum_5d",
-        "importance": 0.03867293894290924
+        "feature": "atr_ratio",
+        "importance": 0.03839825466275215
+      },
+      {
+        "feature": "total_net_sum_20d",
+        "importance": 0.03385544940829277
+      },
+      {
+        "feature": "volume_ratio_ma50",
+        "importance": 0.03371301665902138
+      },
+      {
+        "feature": "price_vs_ma20",
+        "importance": 0.031892698258161545
       }
     ]
   },
@@ -305,47 +305,47 @@
     "train_end": "2024-04-18",
     "test_start": "2024-04-19",
     "test_end": "2024-05-17",
-    "auc": 0.9965497323189632,
+    "auc": 0.9980966469428006,
     "top_features": [
       {
-        "feature": "volume_ratio_ma20",
-        "importance": 0.05325951799750328
+        "feature": "volatility",
+        "importance": 0.060393936932086945
       },
       {
-        "feature": "total_net_sum_5d",
-        "importance": 0.04845067486166954
+        "feature": "ma_trend",
+        "importance": 0.049022410064935684
       },
       {
-        "feature": "total_net_sum_20d",
-        "importance": 0.04771151766180992
+        "feature": "consolidation_days",
+        "importance": 0.04808604344725609
       },
       {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.044492390006780624
+        "feature": "atr_ratio",
+        "importance": 0.0436452217400074
       },
       {
         "feature": "volume_ratio_ma50",
-        "importance": 0.04354318603873253
+        "importance": 0.03854656592011452
+      },
+      {
+        "feature": "grade_numeric",
+        "importance": 0.03656712546944618
+      },
+      {
+        "feature": "volume_trend_5d",
+        "importance": 0.03636933118104935
       },
       {
         "feature": "momentum_20d",
-        "importance": 0.04349539801478386
-      },
-      {
-        "feature": "total_net_sum_3d",
-        "importance": 0.04261069372296333
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.042140763252973557
-      },
-      {
-        "feature": "investment_net_lag1",
-        "importance": 0.04144706949591637
+        "importance": 0.035036567598581314
       },
       {
         "feature": "risk_pct",
-        "importance": 0.0413031242787838
+        "importance": 0.03486255183815956
+      },
+      {
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.03365102410316467
       }
     ]
   },
@@ -355,47 +355,47 @@
     "train_end": "2024-05-17",
     "test_start": "2024-05-20",
     "test_end": "2024-06-18",
-    "auc": 0.9860595612344927,
+    "auc": 0.9898462705683069,
     "top_features": [
       {
-        "feature": "risk_pct",
-        "importance": 0.06468784064054489
+        "feature": "foreign_investment_spread_lag1",
+        "importance": 0.049962494522333145
       },
       {
-        "feature": "total_net_sum_5d",
-        "importance": 0.05535684898495674
+        "feature": "atr_ratio",
+        "importance": 0.04792470484972
+      },
+      {
+        "feature": "dealer_dominance_lag1",
+        "importance": 0.046380288898944855
+      },
+      {
+        "feature": "risk_pct",
+        "importance": 0.04631045088171959
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.04469253867864609
       },
       {
         "feature": "foreign_net_sum_20d",
-        "importance": 0.04811965674161911
+        "importance": 0.03894640877842903
       },
       {
-        "feature": "total_net_sum_3d",
-        "importance": 0.04582047462463379
+        "feature": "total_net_sum_5d",
+        "importance": 0.038861826062202454
       },
       {
-        "feature": "total_net_sum_20d",
-        "importance": 0.04320968687534332
+        "feature": "total_net_lag1",
+        "importance": 0.0386994443833828
       },
       {
-        "feature": "dealer_net_lag1",
-        "importance": 0.042830001562833786
+        "feature": "consolidation_days",
+        "importance": 0.037456173449754715
       },
       {
-        "feature": "momentum_20d",
-        "importance": 0.04183775931596756
-      },
-      {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.040839217603206635
-      },
-      {
-        "feature": "total_net_sum_10d",
-        "importance": 0.040586914867162704
-      },
-      {
-        "feature": "foreign_investment_spread_lag1",
-        "importance": 0.04042622819542885
+        "feature": "foreign_net_lag1",
+        "importance": 0.03730838745832443
       }
     ]
   },
@@ -405,47 +405,47 @@
     "train_end": "2024-06-18",
     "test_start": "2024-06-19",
     "test_end": "2024-07-18",
-    "auc": 0.9662437663109481,
+    "auc": 0.9755383346918449,
     "top_features": [
       {
-        "feature": "risk_pct",
-        "importance": 0.05619218200445175
-      },
-      {
-        "feature": "volume_trend_5d",
-        "importance": 0.05525927618145943
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04829896613955498
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.04657639190554619
-      },
-      {
-        "feature": "volume_ratio_ma20",
-        "importance": 0.04622858762741089
-      },
-      {
-        "feature": "grade_numeric",
-        "importance": 0.045138902962207794
+        "feature": "price_vs_ma50",
+        "importance": 0.045522820204496384
       },
       {
         "feature": "foreign_investment_spread_lag1",
-        "importance": 0.04393308237195015
+        "importance": 0.04525437951087952
       },
       {
-        "feature": "momentum_20d",
-        "importance": 0.04375676438212395
+        "feature": "volatility",
+        "importance": 0.04157860949635506
       },
       {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.04279479756951332
+        "feature": "atr_ratio",
+        "importance": 0.0403643436729908
       },
       {
-        "feature": "total_net_sum_5d",
-        "importance": 0.04251695051789284
+        "feature": "total_net_sum_20d",
+        "importance": 0.04012845456600189
+      },
+      {
+        "feature": "consolidation_days",
+        "importance": 0.039611853659152985
+      },
+      {
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.03957723081111908
+      },
+      {
+        "feature": "ma_trend",
+        "importance": 0.03953482583165169
+      },
+      {
+        "feature": "risk_pct",
+        "importance": 0.03686238080263138
+      },
+      {
+        "feature": "total_net_sum_10d",
+        "importance": 0.03671983629465103
       }
     ]
   },
@@ -455,47 +455,47 @@
     "train_end": "2024-07-18",
     "test_start": "2024-07-19",
     "test_end": "2024-08-16",
-    "auc": 0.9856137139464701,
+    "auc": 0.9944045911047347,
     "top_features": [
       {
-        "feature": "grade_numeric",
-        "importance": 0.14334096014499664
+        "feature": "atr_ratio",
+        "importance": 0.10359666496515274
       },
       {
         "feature": "distance_to_buy_pct",
-        "importance": 0.07350684702396393
+        "importance": 0.05094098299741745
       },
       {
-        "feature": "total_net_sum_20d",
-        "importance": 0.045343492180109024
+        "feature": "volatility",
+        "importance": 0.04378703609108925
       },
       {
-        "feature": "rsi_14",
-        "importance": 0.04417520761489868
+        "feature": "price_vs_ma20",
+        "importance": 0.041857942938804626
       },
       {
         "feature": "risk_pct",
-        "importance": 0.04322745278477669
+        "importance": 0.040576592087745667
       },
       {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.043144334107637405
+        "feature": "consolidation_days",
+        "importance": 0.03784686699509621
+      },
+      {
+        "feature": "momentum_20d",
+        "importance": 0.03693186491727829
+      },
+      {
+        "feature": "ma_trend",
+        "importance": 0.03654370456933975
       },
       {
         "feature": "foreign_net_sum_20d",
-        "importance": 0.04201974347233772
-      },
-      {
-        "feature": "dealer_dominance_lag1",
-        "importance": 0.038793500512838364
-      },
-      {
-        "feature": "total_net_sum_3d",
-        "importance": 0.03846663609147072
+        "importance": 0.03496705740690231
       },
       {
         "feature": "total_net_sum_5d",
-        "importance": 0.037284333258867264
+        "importance": 0.034776534885168076
       }
     ]
   },
@@ -505,47 +505,47 @@
     "train_end": "2024-08-16",
     "test_start": "2024-08-19",
     "test_end": "2024-09-18",
-    "auc": 0.9903861719349066,
+    "auc": 0.9969082815029394,
     "top_features": [
       {
+        "feature": "ma_trend",
+        "importance": 0.10189162939786911
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.06221875175833702
+      },
+      {
+        "feature": "atr_ratio",
+        "importance": 0.05005181208252907
+      },
+      {
         "feature": "total_net_sum_20d",
-        "importance": 0.05594344809651375
+        "importance": 0.04882558435201645
       },
       {
         "feature": "total_net_sum_10d",
-        "importance": 0.047650814056396484
+        "importance": 0.048514075577259064
       },
       {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.04682409390807152
-      },
-      {
-        "feature": "volume_ratio_ma20",
-        "importance": 0.046614330261945724
+        "feature": "consolidation_days",
+        "importance": 0.04325944930315018
       },
       {
         "feature": "momentum_20d",
-        "importance": 0.04394393414258957
+        "importance": 0.03566958010196686
       },
       {
-        "feature": "rsi_14",
-        "importance": 0.043652456253767014
+        "feature": "total_net_lag1",
+        "importance": 0.034744299948215485
       },
       {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.04211512953042984
+        "feature": "volume_ratio_ma50",
+        "importance": 0.03343932703137398
       },
       {
-        "feature": "momentum_5d",
-        "importance": 0.04165760427713394
-      },
-      {
-        "feature": "grade_numeric",
-        "importance": 0.04148022085428238
-      },
-      {
-        "feature": "total_net_to_vol_lag1",
-        "importance": 0.04062581807374954
+        "feature": "total_net_sum_5d",
+        "importance": 0.032244086265563965
       }
     ]
   },
@@ -555,47 +555,47 @@
     "train_end": "2024-09-18",
     "test_start": "2024-09-19",
     "test_end": "2024-10-18",
-    "auc": 0.9822055445879199,
+    "auc": 0.9946468762722671,
     "top_features": [
       {
         "feature": "foreign_investment_spread_lag1",
-        "importance": 0.05809687077999115
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.05349805951118469
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.05343829467892647
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04946150258183479
-      },
-      {
-        "feature": "rsi_14",
-        "importance": 0.0489669032394886
-      },
-      {
-        "feature": "dealer_net_lag1",
-        "importance": 0.046739380806684494
+        "importance": 0.05548524111509323
       },
       {
         "feature": "foreign_net_sum_5d",
-        "importance": 0.04665512591600418
+        "importance": 0.049439236521720886
       },
       {
-        "feature": "total_net_sum_5d",
-        "importance": 0.04389941692352295
+        "feature": "consolidation_days",
+        "importance": 0.04493653029203415
       },
       {
-        "feature": "grade_numeric",
-        "importance": 0.04300603270530701
+        "feature": "volatility",
+        "importance": 0.04421123117208481
       },
       {
-        "feature": "investment_net_lag1",
-        "importance": 0.03855092450976372
+        "feature": "risk_pct",
+        "importance": 0.041362132877111435
+      },
+      {
+        "feature": "dealer_net_lag1",
+        "importance": 0.039102014154195786
+      },
+      {
+        "feature": "total_net_sum_20d",
+        "importance": 0.03832646831870079
+      },
+      {
+        "feature": "atr_ratio",
+        "importance": 0.03780149295926094
+      },
+      {
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.03738149255514145
+      },
+      {
+        "feature": "price_vs_ma50",
+        "importance": 0.03723127394914627
       }
     ]
   },
@@ -605,47 +605,47 @@
     "train_end": "2024-10-18",
     "test_start": "2024-10-21",
     "test_end": "2024-11-18",
-    "auc": 0.9876872869297835,
+    "auc": 0.9963437867053734,
     "top_features": [
       {
-        "feature": "grade_numeric",
-        "importance": 0.09586121141910553
+        "feature": "consolidation_days",
+        "importance": 0.0989304855465889
       },
       {
-        "feature": "dealer_net_lag1",
-        "importance": 0.05795824155211449
+        "feature": "ma_trend",
+        "importance": 0.04810863360762596
       },
       {
-        "feature": "distance_to_buy_pct",
-        "importance": 0.04891414940357208
+        "feature": "volatility",
+        "importance": 0.04162615165114403
       },
       {
-        "feature": "investment_net_lag1",
-        "importance": 0.046600569039583206
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.042477089911699295
-      },
-      {
-        "feature": "total_net_to_vol_lag1",
-        "importance": 0.0404890701174736
+        "feature": "foreign_net_sum_10d",
+        "importance": 0.03896741196513176
       },
       {
         "feature": "total_net_sum_20d",
-        "importance": 0.04030448943376541
+        "importance": 0.03836652636528015
       },
       {
-        "feature": "rsi_14",
-        "importance": 0.03973107039928436
+        "feature": "atr_ratio",
+        "importance": 0.03822057694196701
       },
       {
-        "feature": "dealer_dominance_lag1",
-        "importance": 0.039412640035152435
+        "feature": "distance_to_buy_pct",
+        "importance": 0.034888483583927155
       },
       {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.039252568036317825
+        "feature": "price_vs_ma20",
+        "importance": 0.0344349704682827
+      },
+      {
+        "feature": "risk_pct",
+        "importance": 0.03255869820713997
+      },
+      {
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.03223297744989395
       }
     ]
   },
@@ -655,47 +655,47 @@
     "train_end": "2024-11-18",
     "test_start": "2024-11-19",
     "test_end": "2024-12-18",
-    "auc": 0.9889042242658543,
+    "auc": 0.9956849422055607,
     "top_features": [
       {
-        "feature": "total_net_sum_20d",
-        "importance": 0.050301991403102875
-      },
-      {
-        "feature": "foreign_investment_spread_lag1",
-        "importance": 0.04969774931669235
-      },
-      {
-        "feature": "dealer_net_lag1",
-        "importance": 0.048175882548093796
-      },
-      {
-        "feature": "momentum_20d",
-        "importance": 0.04743242636322975
-      },
-      {
-        "feature": "total_net_sum_10d",
-        "importance": 0.04587051644921303
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04531770572066307
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.04508921504020691
+        "feature": "consolidation_days",
+        "importance": 0.07673944532871246
       },
       {
         "feature": "investment_net_lag1",
-        "importance": 0.043940138071775436
+        "importance": 0.04622253030538559
+      },
+      {
+        "feature": "price_vs_ma50",
+        "importance": 0.04565364122390747
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.04049616679549217
+      },
+      {
+        "feature": "total_net_sum_20d",
+        "importance": 0.04012494161725044
+      },
+      {
+        "feature": "total_net_sum_10d",
+        "importance": 0.03958627209067345
+      },
+      {
+        "feature": "ma_trend",
+        "importance": 0.03904154896736145
+      },
+      {
+        "feature": "atr_ratio",
+        "importance": 0.03651285916566849
       },
       {
         "feature": "rsi_14",
-        "importance": 0.04308144003152847
+        "importance": 0.03471338376402855
       },
       {
-        "feature": "foreign_net_lag1",
-        "importance": 0.04226714000105858
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.0346984826028347
       }
     ]
   },
@@ -705,47 +705,47 @@
     "train_end": "2024-12-18",
     "test_start": "2024-12-19",
     "test_end": "2025-01-17",
-    "auc": 0.992516216562438,
+    "auc": 0.9978222641465488,
     "top_features": [
       {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.050919849425554276
-      },
-      {
-        "feature": "volume_trend_5d",
-        "importance": 0.04834476858377457
+        "feature": "consolidation_days",
+        "importance": 0.08414994180202484
       },
       {
         "feature": "total_net_sum_20d",
-        "importance": 0.04555441066622734
+        "importance": 0.055454038083553314
       },
       {
-        "feature": "investment_net_lag1",
-        "importance": 0.04522300139069557
+        "feature": "volatility",
+        "importance": 0.05134277418255806
+      },
+      {
+        "feature": "atr_ratio",
+        "importance": 0.04481494054198265
       },
       {
         "feature": "distance_to_buy_pct",
-        "importance": 0.04471524432301521
+        "importance": 0.04160917177796364
       },
       {
-        "feature": "momentum_20d",
-        "importance": 0.04414648935198784
-      },
-      {
-        "feature": "rsi_14",
-        "importance": 0.04314765706658363
-      },
-      {
-        "feature": "total_net_sum_10d",
-        "importance": 0.04250146448612213
+        "feature": "volume_trend_5d",
+        "importance": 0.04158464074134827
       },
       {
         "feature": "foreign_net_sum_20d",
-        "importance": 0.04098675027489662
+        "importance": 0.04142053425312042
       },
       {
-        "feature": "volume_ratio_ma20",
-        "importance": 0.0405835397541523
+        "feature": "risk_pct",
+        "importance": 0.03775068372488022
+      },
+      {
+        "feature": "total_net_sum_3d",
+        "importance": 0.03770532086491585
+      },
+      {
+        "feature": "foreign_net_sum_10d",
+        "importance": 0.03543312847614288
       }
     ]
   },
@@ -755,47 +755,47 @@
     "train_end": "2025-01-17",
     "test_start": "2025-01-20",
     "test_end": "2025-02-18",
-    "auc": 0.9987195902688859,
+    "auc": 0.9999704974716334,
     "top_features": [
       {
         "feature": "rsi_14",
-        "importance": 0.06080790236592293
+        "importance": 0.061259154230356216
       },
       {
-        "feature": "risk_pct",
-        "importance": 0.054431937634944916
+        "feature": "consolidation_days",
+        "importance": 0.05765978991985321
       },
       {
-        "feature": "total_net_sum_3d",
-        "importance": 0.053487833589315414
+        "feature": "volatility",
+        "importance": 0.052104052156209946
       },
       {
         "feature": "total_net_sum_10d",
-        "importance": 0.05325331538915634
-      },
-      {
-        "feature": "foreign_net_sum_5d",
-        "importance": 0.04774906113743782
+        "importance": 0.049638018012046814
       },
       {
         "feature": "total_net_sum_20d",
-        "importance": 0.04659341648221016
+        "importance": 0.045632798224687576
       },
       {
-        "feature": "foreign_net_sum_3d",
-        "importance": 0.04583160579204559
+        "feature": "price_vs_ma20",
+        "importance": 0.03887174278497696
+      },
+      {
+        "feature": "total_net_sum_3d",
+        "importance": 0.03854506090283394
       },
       {
         "feature": "momentum_20d",
-        "importance": 0.04571610689163208
+        "importance": 0.03773541748523712
       },
       {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.04487059637904167
+        "feature": "foreign_net_sum_3d",
+        "importance": 0.03691419959068298
       },
       {
-        "feature": "investment_net_lag1",
-        "importance": 0.04474171996116638
+        "feature": "distance_to_buy_pct",
+        "importance": 0.03637475147843361
       }
     ]
   },
@@ -805,47 +805,47 @@
     "train_end": "2025-02-18",
     "test_start": "2025-02-19",
     "test_end": "2025-03-18",
-    "auc": 0.999283231972198,
+    "auc": 0.9999891398783666,
     "top_features": [
       {
-        "feature": "dealer_net_lag1",
-        "importance": 0.08622010797262192
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.05969022586941719
+        "feature": "market_trend",
+        "importance": 0.21914617717266083
       },
       {
         "feature": "total_net_sum_5d",
-        "importance": 0.055018164217472076
+        "importance": 0.0470757782459259
+      },
+      {
+        "feature": "dealer_net_lag1",
+        "importance": 0.03915085271000862
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.03864636644721031
+      },
+      {
+        "feature": "total_net_sum_20d",
+        "importance": 0.03669547289609909
+      },
+      {
+        "feature": "volume_trend_5d",
+        "importance": 0.03371082618832588
+      },
+      {
+        "feature": "total_net_sum_3d",
+        "importance": 0.032719071954488754
       },
       {
         "feature": "total_net_sum_10d",
-        "importance": 0.05405097082257271
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.05242070183157921
-      },
-      {
-        "feature": "volume_surge",
-        "importance": 0.042818814516067505
+        "importance": 0.03059292398393154
       },
       {
         "feature": "foreign_net_sum_3d",
-        "importance": 0.04235869273543358
+        "importance": 0.030325185507535934
       },
       {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04011388495564461
-      },
-      {
-        "feature": "rsi_14",
-        "importance": 0.040053579956293106
-      },
-      {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.03852264955639839
+        "feature": "volume_ratio_ma50",
+        "importance": 0.03025851398706436
       }
     ]
   },
@@ -858,44 +858,44 @@
     "auc": 1.0,
     "top_features": [
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.09273989498615265
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.0696214810013771
+        "feature": "market_trend",
+        "importance": 0.333342581987381
       },
       {
         "feature": "foreign_net_sum_10d",
-        "importance": 0.05191434174776077
+        "importance": 0.06072539463639259
       },
       {
-        "feature": "foreign_investment_spread_lag1",
-        "importance": 0.05121481046080589
+        "feature": "dealer_dominance_lag1",
+        "importance": 0.05817946791648865
       },
       {
-        "feature": "foreign_net_sum_3d",
-        "importance": 0.04983040317893028
+        "feature": "total_net_sum_10d",
+        "importance": 0.04394761845469475
       },
       {
-        "feature": "foreign_net_sum_5d",
-        "importance": 0.04959231987595558
+        "feature": "rsi_divergence",
+        "importance": 0.03918558731675148
       },
       {
-        "feature": "momentum_20d",
-        "importance": 0.048026591539382935
+        "feature": "price_vs_ma20",
+        "importance": 0.0380607433617115
       },
       {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.0467521958053112
+        "feature": "total_net_sum_20d",
+        "importance": 0.03396325930953026
       },
       {
-        "feature": "momentum_5d",
-        "importance": 0.04491138458251953
+        "feature": "rsi_14",
+        "importance": 0.03118298202753067
       },
       {
-        "feature": "total_net_sum_5d",
-        "importance": 0.04226238280534744
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.029722804203629494
+      },
+      {
+        "feature": "atr_ratio",
+        "importance": 0.02936328388750553
       }
     ]
   },
@@ -908,44 +908,44 @@
     "auc": 1.0,
     "top_features": [
       {
-        "feature": "total_net_sum_5d",
-        "importance": 0.13938790559768677
+        "feature": "market_trend",
+        "importance": 0.18069592118263245
+      },
+      {
+        "feature": "total_net_sum_20d",
+        "importance": 0.11362829804420471
+      },
+      {
+        "feature": "total_net_lag1",
+        "importance": 0.1044064611196518
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.09260337799787521
       },
       {
         "feature": "risk_pct",
-        "importance": 0.08527949452400208
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.06687383353710175
-      },
-      {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.06407878547906876
+        "importance": 0.06387961655855179
       },
       {
         "feature": "distance_to_buy_pct",
-        "importance": 0.06133163720369339
-      },
-      {
-        "feature": "foreign_net_sum_5d",
-        "importance": 0.059702783823013306
+        "importance": 0.05842481553554535
       },
       {
         "feature": "momentum_5d",
-        "importance": 0.05013705790042877
+        "importance": 0.053369518369436264
       },
       {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.049969084560871124
+        "feature": "consolidation_days",
+        "importance": 0.05255291610956192
       },
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.0459066741168499
+        "feature": "atr_ratio",
+        "importance": 0.04050196334719658
       },
       {
         "feature": "momentum_20d",
-        "importance": 0.04482360556721687
+        "importance": 0.03979512304067612
       }
     ]
   },
@@ -955,47 +955,47 @@
     "train_end": "2025-05-16",
     "test_start": "2025-05-19",
     "test_end": "2025-06-18",
-    "auc": 0.9996477881093266,
+    "auc": 1.0,
     "top_features": [
       {
-        "feature": "total_net_sum_3d",
-        "importance": 0.06440895795822144
+        "feature": "volatility",
+        "importance": 0.06520955264568329
       },
       {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.06369328498840332
+        "feature": "consolidation_days",
+        "importance": 0.06356846541166306
       },
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.05818605422973633
-      },
-      {
-        "feature": "total_net_sum_5d",
-        "importance": 0.05079839378595352
-      },
-      {
-        "feature": "grade_numeric",
-        "importance": 0.04948044940829277
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.045487456023693085
-      },
-      {
-        "feature": "investment_net_lag1",
-        "importance": 0.043920304626226425
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.04387445002794266
+        "feature": "price_vs_ma50",
+        "importance": 0.045175619423389435
       },
       {
         "feature": "volume_ratio_ma50",
-        "importance": 0.043343447148799896
+        "importance": 0.043696146458387375
       },
       {
-        "feature": "rsi_14",
-        "importance": 0.04150755703449249
+        "feature": "total_net_sum_5d",
+        "importance": 0.04368729144334793
+      },
+      {
+        "feature": "atr_ratio",
+        "importance": 0.042672332376241684
+      },
+      {
+        "feature": "total_net_sum_10d",
+        "importance": 0.0423884242773056
+      },
+      {
+        "feature": "ma_trend",
+        "importance": 0.04153154790401459
+      },
+      {
+        "feature": "risk_pct",
+        "importance": 0.040111392736434937
+      },
+      {
+        "feature": "total_net_sum_20d",
+        "importance": 0.03724604472517967
       }
     ]
   },
@@ -1005,47 +1005,47 @@
     "train_end": "2025-06-18",
     "test_start": "2025-06-19",
     "test_end": "2025-07-18",
-    "auc": 0.9996196479026299,
+    "auc": 1.0,
     "top_features": [
       {
-        "feature": "grade_numeric",
-        "importance": 0.0829717144370079
+        "feature": "market_trend",
+        "importance": 0.26867812871932983
       },
       {
         "feature": "total_net_sum_10d",
-        "importance": 0.07818630337715149
+        "importance": 0.04437977448105812
       },
       {
-        "feature": "total_net_sum_5d",
-        "importance": 0.054842233657836914
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.05330386385321617
+        "feature": "investment_net_lag1",
+        "importance": 0.03944123163819313
       },
       {
         "feature": "rsi_14",
-        "importance": 0.05046970024704933
+        "importance": 0.03774195909500122
       },
       {
-        "feature": "risk_pct",
-        "importance": 0.049066975712776184
+        "feature": "atr_ratio",
+        "importance": 0.03631576523184776
       },
       {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04756128415465355
+        "feature": "price_vs_ma50",
+        "importance": 0.029704760760068893
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.029347453266382217
       },
       {
         "feature": "foreign_net_sum_5d",
-        "importance": 0.04246973991394043
+        "importance": 0.029287345707416534
       },
       {
-        "feature": "foreign_net_sum_3d",
-        "importance": 0.04229708015918732
+        "feature": "dealer_net_lag1",
+        "importance": 0.02865896373987198
       },
       {
-        "feature": "total_net_sum_3d",
-        "importance": 0.04176725819706917
+        "feature": "momentum_20d",
+        "importance": 0.027595067396759987
       }
     ]
   },
@@ -1055,47 +1055,47 @@
     "train_end": "2025-07-18",
     "test_start": "2025-07-21",
     "test_end": "2025-08-18",
-    "auc": 0.9968867030636647,
+    "auc": 0.999807213496696,
     "top_features": [
       {
-        "feature": "rsi_14",
-        "importance": 0.06770417094230652
+        "feature": "market_trend",
+        "importance": 0.2113577276468277
       },
       {
-        "feature": "dealer_dominance_lag1",
-        "importance": 0.0524500347673893
+        "feature": "consolidation_days",
+        "importance": 0.09694047272205353
       },
       {
         "feature": "foreign_investment_spread_lag1",
-        "importance": 0.049294520169496536
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.04886176437139511
-      },
-      {
-        "feature": "foreign_net_sum_10d",
-        "importance": 0.047970548272132874
-      },
-      {
-        "feature": "investment_net_lag1",
-        "importance": 0.047268129885196686
-      },
-      {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.04565112292766571
+        "importance": 0.040676653385162354
       },
       {
         "feature": "volume_ratio_ma20",
-        "importance": 0.04450284317135811
+        "importance": 0.03525172546505928
       },
       {
-        "feature": "total_net_to_vol_lag1",
-        "importance": 0.042402349412441254
+        "feature": "rsi_14",
+        "importance": 0.034450069069862366
       },
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.04217883199453354
+        "feature": "price_vs_ma20",
+        "importance": 0.031050946563482285
+      },
+      {
+        "feature": "risk_pct",
+        "importance": 0.029683314263820648
+      },
+      {
+        "feature": "foreign_net_sum_10d",
+        "importance": 0.027924304828047752
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.02790476754307747
+      },
+      {
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.027692358940839767
       }
     ]
   },
@@ -1105,47 +1105,47 @@
     "train_end": "2025-08-18",
     "test_start": "2025-08-19",
     "test_end": "2025-09-18",
-    "auc": 0.9970177947305316,
+    "auc": 0.99971808310095,
     "top_features": [
       {
-        "feature": "grade_numeric",
-        "importance": 0.11480879038572311
+        "feature": "consolidation_days",
+        "importance": 0.09510355442762375
       },
       {
-        "feature": "momentum_20d",
-        "importance": 0.05956212803721428
-      },
-      {
-        "feature": "investment_net_lag1",
-        "importance": 0.05662352219223976
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.05204186588525772
-      },
-      {
-        "feature": "momentum_5d",
-        "importance": 0.04998095706105232
-      },
-      {
-        "feature": "total_net_sum_5d",
-        "importance": 0.04927234351634979
+        "feature": "market_trend",
+        "importance": 0.08505868166685104
       },
       {
         "feature": "rsi_14",
-        "importance": 0.04558094963431358
+        "importance": 0.046005651354789734
       },
       {
-        "feature": "volume_ratio_ma20",
-        "importance": 0.0389840342104435
+        "feature": "atr_ratio",
+        "importance": 0.04425406455993652
+      },
+      {
+        "feature": "foreign_net_sum_20d",
+        "importance": 0.04400726780295372
       },
       {
         "feature": "total_net_sum_20d",
-        "importance": 0.038025129586458206
+        "importance": 0.04057268425822258
       },
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.03581102564930916
+        "feature": "foreign_net_sum_10d",
+        "importance": 0.039480652660131454
+      },
+      {
+        "feature": "volatility",
+        "importance": 0.03718097507953644
+      },
+      {
+        "feature": "foreign_net_sum_3d",
+        "importance": 0.036589693278074265
+      },
+      {
+        "feature": "foreign_net_sum_5d",
+        "importance": 0.03530251234769821
       }
     ]
   },
@@ -1155,47 +1155,47 @@
     "train_end": "2025-09-18",
     "test_start": "2025-09-19",
     "test_end": "2025-10-17",
-    "auc": 0.998109640831758,
+    "auc": 0.9989292371144923,
     "top_features": [
       {
-        "feature": "total_net_sum_10d",
-        "importance": 0.06272175908088684
-      },
-      {
-        "feature": "foreign_investment_spread_lag1",
-        "importance": 0.05645152926445007
-      },
-      {
-        "feature": "momentum_20d",
-        "importance": 0.052818287163972855
-      },
-      {
-        "feature": "foreign_net_sum_20d",
-        "importance": 0.05155685171484947
-      },
-      {
-        "feature": "investment_net_lag1",
-        "importance": 0.04913904145359993
-      },
-      {
-        "feature": "rsi_14",
-        "importance": 0.049076423048973083
-      },
-      {
-        "feature": "total_net_sum_20d",
-        "importance": 0.04897726699709892
-      },
-      {
-        "feature": "risk_pct",
-        "importance": 0.048570431768894196
+        "feature": "consolidation_days",
+        "importance": 0.09240544587373734
       },
       {
         "feature": "distance_to_buy_pct",
-        "importance": 0.04473171383142471
+        "importance": 0.07274976372718811
       },
       {
-        "feature": "volume_ratio_ma50",
-        "importance": 0.04443252459168434
+        "feature": "risk_pct",
+        "importance": 0.04678821563720703
+      },
+      {
+        "feature": "momentum_20d",
+        "importance": 0.04303226247429848
+      },
+      {
+        "feature": "grade_numeric",
+        "importance": 0.04106096178293228
+      },
+      {
+        "feature": "foreign_net_sum_10d",
+        "importance": 0.0352596640586853
+      },
+      {
+        "feature": "total_net_sum_10d",
+        "importance": 0.03516746312379837
+      },
+      {
+        "feature": "foreign_investment_spread_lag1",
+        "importance": 0.03384627029299736
+      },
+      {
+        "feature": "foreign_net_sum_3d",
+        "importance": 0.03360247239470482
+      },
+      {
+        "feature": "price_vs_ma50",
+        "importance": 0.032792847603559494
       }
     ]
   }
