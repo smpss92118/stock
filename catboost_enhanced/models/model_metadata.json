@@ -5,7 +5,7 @@
     "exit_mode"
   ],
   "n_samples": 28758,
-  "training_date": "2025-11-23T00:10:57.867251",
+  "training_date": "2025-11-23T02:06:11.429234",
   "model_type": "CatBoostClassifier",
   "objective": "MultiClass (4-class: D/C/B/A)",
   "class_weights": [
