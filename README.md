@@ -9,10 +9,12 @@
 2. **ML 增強掃描**: 使用 XGBoost 模型過濾，提供高品質訊號推薦
 
 **核心優勢**:
-- ✅ 年化報酬 **171.1%** (ML-Enhanced CUP R=2.0)
-- ✅ Sharpe Ratio **2.99** (風險調整後報酬為原始策略的 2.5 倍)
-- ✅ 勝率 **77.6%** (vs 原始策略 39.5%)
+- ✅ 年化報酬 **151.2%** (HTF Trailing with Pyramiding)
+- ✅ ML 增強報酬 **146.7%** (CUP R=2.0 ML 0.5)
+- ✅ Sharpe Ratio **3.13** (風險調整後收益極佳)
+- ✅ 勝率 **74.6%** (ML 過濾後)
 - ✅ 全自動化：每日掃描 + 每週模型更新
+- ✅ 完整數據：TWSE + TPEX 約 1900 檔股票
 
 ---
 
@@ -23,14 +25,16 @@ stock/
 ├── main.py                    # 原始策略每日掃描 (Crontab Entry 1)
 ├── config.py                  # 系統配置
 ├── scripts/                   # 核心執行腳本
-│   ├── update_daily_data.py   # 數據更新 (TWSE + TPEX)
+│   ├── update_daily_data.py   # 數據更新 (TWSE + TPEX 約1900檔)
 │   ├── run_historical_analysis.py  # 歷史型態分析
 │   ├── run_daily_scan.py      # 每日訊號掃描
-│   ├── run_backtest.py        # 回測引擎
+│   ├── run_backtest.py        # 回測引擎 (支援 Pyramiding)
+│   ├── generate_daily_position_report.py  # 每日持倉報告
 │   └── backtest_engine_v2.py  # V2 回測引擎
 ├── src/                       # 核心邏輯
-│   ├── strategies/            # 型態識別 (HTF, CUP, VCP)
-│   ├── utils/                 # 工具函數
+│   ├── strategies/            # 策略邏輯 (HTF, CUP, VCP)
+│   ├── ml/                    # [NEW] ML 共享模組 (features.py)
+│   ├── utils/                 # [NEW] 通用工具 (logger.py, data_loader.py)
 │   └── crawlers/              # 數據爬蟲
 ├── ml_enhanced/               # ML 增強系統 (Production)
 │   ├── daily_ml_scanner.py    # ML 每日掃描 (Crontab Entry 2)
@@ -42,15 +46,24 @@ stock/
 │   ├── data/                  # ML 訓練數據
 │   ├── daily_reports/         # 每日 ML 報告
 │   ├── results/               # 回測結果
-│   ├── README.md              # ML 系統說明
-│   └── CRONTAB_SETUP.md       # 自動化設定
+│   └── docs/                  #（文檔集中於 docs/ml/）
 ├── optimization/              # 超參數優化 (Historical)
 │   └── optimize_hyperparameters.py
 ├── data/                      # 數據存放
 │   ├── raw/daily_quotes/      # 每日股價
 │   └── processed/             # 處理後數據
 ├── daily_tracking_stock/      # 每日原始報告
-├── docs/                      # 文檔
+├── docs/                      # 文檔（索引見 docs/README.md）
+│   ├── system_overview.md
+│   ├── operations.md
+│   ├── strategy_patterns.md
+│   ├── backtest_engine.md
+│   ├── ml/
+│   │   ├── overview.md
+│   │   └── system_logic.md
+│   └── optimization/
+│       ├── hyperparameter_guide.md
+│       └── change_log.md
 └── archive/                   # 已棄用文件
 ```
 
@@ -75,13 +88,13 @@ stock/
 0 2 * * 0 /Users/sony/ml_stock/stock/.venv/bin/python /Users/sony/ml_stock/stock/ml_enhanced/weekly_retrain.py >> /Users/sony/ml_stock/logs/ml_retrain.log 2>&1
 ```
 
-詳細設定請見 [`ml_enhanced/CRONTAB_SETUP.md`](ml_enhanced/CRONTAB_SETUP.md)
+詳細設定請見 `docs/operations.md`
 
 ---
 
 ## 📊 每日輸出報告
 
-###1. 原始策略報告
+### 1. 原始策略報告
 **位置**: `stock/daily_tracking_stock/YYYY-MM-DD/daily_summary.md`
 
 **內容**:
@@ -124,21 +137,28 @@ stock/.venv/bin/python stock/ml_enhanced/weekly_retrain.py
 
 ## 📈 策略績效 (回測驗證)
 
-### ML-Enhanced System (推薦) ⭐
-- **策略**: CUP Fixed (R=2.0, T=20) + ML 0.4
-- **年化報酬**: **171.1%**
-- **Sharpe Ratio**: **2.99**
-- **勝率**: **77.6%**
-- **最大回撤**: ~-11.8%
+### 最佳策略組合（允許 Pyramiding）🏆
 
-### Original System (Baseline)
-- **策略**: HTF Trailing (1.5R trigger, MA20)
-- **年化報酬**: **153.4%**
-- **Sharpe Ratio**: **1.19**
-- **勝率**: **39.5%**
--最大回撤**: ~-30.9%
+**Top 3 策略**：
+1. **HTF Trailing (Baseline)**: 年化 **151.2%**, Sharpe **1.19**, 勝率 **38.7%**
+2. **CUP R=2.0 (ML 0.5)**: 年化 **146.7%**, Sharpe **3.13**, 勝率 **74.6%** ⭐
+3. **CUP R=3.0 (ML 0.5)**: 年化 **125.6%**, Sharpe **2.76**, 勝率 **73.2%**
 
-**結論**: ML 系統在相似報酬下，風險降低 2.5 倍，勝率提升 2 倍。
+### 系統配置
+
+**回測參數**：
+- ✅ **允許 Pyramiding**：同一股票可多次進場（捕捉超級股票）
+- ⏱️ **追蹤窗口**：30 天（最佳平衡點）
+- 💰 **初始資金**：100 萬
+- 📊 **最大持倉**：10 個部位
+- 📈 **部位大小**：總資產的 10%（複利）
+
+**新增指標**：
+- 平均持倉天數
+- 最大連勝/連敗
+- 最大回撤 (MDD)
+
+**結論**: ML 系統提供最佳風險調整後收益（Sharpe 3.13），適合追求穩健報酬的投資人。HTF Trailing 提供最高絕對報酬，適合可承受較高波動的投資人。
 
 ---
 
@@ -151,7 +171,7 @@ stock/.venv/bin/python stock/ml_enhanced/weekly_retrain.py
 
 ### ML 模型
 - **算法**: XGBoost Classifier
-- **特徵**: 型態品質、技術指標、市場趨勢 (10 features)
+- **特徵**: 24 項（型態品質、成交量、動能、RSI、趨勢/波動、市場環境、RS、型態專屬、訊號密度）
 - **訓練**: 14,033 樣本 (時間序列分割)
 - **性能**: ROC AUC 0.73, Threshold 0.4
 
@@ -159,22 +179,29 @@ stock/.venv/bin/python stock/ml_enhanced/weekly_retrain.py
 - **資金管理**: 有限資本 (100萬初始)
 - **倉位控制**: 每筆 10%, 最多 10 檔
 - **複利計算**: 基於當前總資產
+- **Pyramiding**: 允許同股票多次進場（最佳化報酬）
+- **追蹤窗口**: 30 天（訊號後 30 天內等待進場）
 - **出場策略**: Trailing Stop / Fixed R-multiple
+- **現金管理**: 每次進場前檢查現金，T+0 假設
 
 ---
 
 ## 📖 文檔
 
-- [`ml_enhanced/README.md`](ml_enhanced/README.md) - ML 系統詳細說明
-- [`ml_enhanced/CRONTAB_SETUP.md`](ml_enhanced/CRONTAB_SETUP.md) - 自動化設定
-- [`docs/pattern_logic.md`](docs/pattern_logic.md) - 型態定義細節
-- [`docs/optimization_vs_baseline.md`](docs/optimization_vs_baseline.md) - 優化歷史
+- `docs/README.md` - 文檔索引
+- `docs/system_overview.md` - 系統架構與流程
+- `docs/operations.md` - 排程與手動執行
+- `docs/strategy_patterns.md` - 型態定義細節
+- `docs/backtest_engine.md` - 回測引擎邏輯 ⭐
+- `docs/ml/overview.md` / `docs/ml/system_logic.md` - ML 系統與特徵說明
+- `docs/optimization/hyperparameter_guide.md` / `docs/optimization/change_log.md` - 策略優化指南與紀錄
+- （產出報告，未重構）`docs/backtest_report_v2.md`, `docs/optimization_vs_baseline.md`
 
 ---
 
 ## 🛠️ 系統需求
 
-- Python 3.8+
+- Python 3.11+
 - Poetry (依賴管理)
 - Pandas, NumPy, Polars
 - XGBoost, scikit-learn
@@ -194,5 +221,7 @@ poetry shell
 
 ---
 
-**最後更新**: 2025-11-20  
-**ML System Version**: 1.0 (Production Ready)
+**最後更新**: 2025-11-21  
+**ML System Version**: 2.0  
+**系統狀態**: Production Ready  
+**關鍵改進**: 移除 No Pyramiding限制、30天追蹤窗口、完整 TPEX 數據源

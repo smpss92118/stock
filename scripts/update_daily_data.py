@@ -8,6 +8,7 @@ import time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.crawlers.twse import TWSECrawler
+from src.crawlers.tpex import TPEXCrawler
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../data/raw')
 QUOTES_DIR = os.path.join(DATA_DIR, 'daily_quotes')
@@ -49,6 +50,7 @@ def update_market_file(index_data):
 
 def main():
     crawler = TWSECrawler()
+    tpex_crawler = TPEXCrawler()
     
     # 1. Determine start date
     last_date = get_last_date(QUOTES_DIR)
@@ -77,12 +79,21 @@ def main():
         formatted_date = current_date.strftime('%Y-%m-%d')
         
         # A. Fetch Quotes
-        quotes_df = crawler.fetch_daily_quotes(date_str)
-        if quotes_df is not None and not quotes_df.empty:
+        quotes_twse = crawler.fetch_daily_quotes(date_str)
+        quotes_tpex = tpex_crawler.fetch_daily_quotes(date_str)
+        
+        quotes_df = pd.DataFrame()
+        if quotes_twse is not None and not quotes_twse.empty:
+            quotes_df = pd.concat([quotes_df, quotes_twse], ignore_index=True)
+            
+        if quotes_tpex is not None and not quotes_tpex.empty:
+            quotes_df = pd.concat([quotes_df, quotes_tpex], ignore_index=True)
+            
+        if not quotes_df.empty:
             # Save to CSV
             output_path = os.path.join(QUOTES_DIR, f"{formatted_date}.csv")
             quotes_df.to_csv(output_path, index=False)
-            print(f"Saved quotes for {formatted_date}")
+            print(f"Saved quotes for {formatted_date} (Total: {len(quotes_df)})")
         else:
             print(f"No quotes data for {formatted_date} (Holiday?)")
             

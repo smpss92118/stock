@@ -27,39 +27,60 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from ml_enhanced.scripts.prepare_ml_data import main as prepare_data
 from ml_enhanced.scripts.train_models import main as train_models
 
+# Import shared logger
+from src.utils.logger import setup_logger
+
+# Setup Logger
+logger = setup_logger('weekly_retrain')
+
 def main():
-    print("="*80)
-    print("Weekly ML Model Retraining")
-    print("="*80)
+    logger.info("="*80)
+    logger.info("Weekly ML Model Retraining")
+    logger.info("="*80)
     
     # 1. 準備最新數據
-    print("\n>>> Step 1: Preparing ML features with latest data...")
+    logger.info("\n>>> Step 1: Preparing ML features with latest data...")
     try:
         prepare_data()
-        print("✅ Feature preparation complete")
+        logger.info("✅ Feature preparation complete")
     except Exception as e:
-        print(f"❌ Feature preparation failed: {e}")
+        logger.error(f"❌ Feature preparation failed: {e}")
         return
     
     # 2. 重新訓練模型
-    print("\n>>> Step 2: Retraining ML models...")
+    logger.info("\n>>> Step 2: Retraining ML models...")
     try:
         train_models()
-        print("✅ Model training complete")
+        logger.info("✅ Model training complete")
     except Exception as e:
-        print(f"❌ Model training failed: {e}")
+        logger.error(f"❌ Model training failed: {e}")
         return
+
+    # 3. 執行回測驗證
+    logger.info("\n>>> Step 3: Running ML Backtest...")
+    try:
+        from ml_enhanced.scripts.run_ml_backtest import main as run_backtest
+        run_backtest()
+        logger.info("✅ Backtest complete")
+    except Exception as e:
+        logger.error(f"❌ Backtest failed: {e}")
+        # Don't return, still show completion message
+
     
-    print("\n" + "="*80)
-    print("Weekly Retraining Complete!")
-    print("="*80)
-    print("\nModels updated:")
-    print("  - stock/ml_enhanced/models/stock_selector.pkl")
-    print("  - stock/ml_enhanced/models/position_sizer.pkl")
-    print("  - stock/ml_enhanced/models/feature_info.pkl")
-    print("\nNext steps:")
-    print("  - New models will be used in tomorrow's daily scan")
-    print("  - Monitor performance in daily reports")
+    logger.info("\n" + "="*80)
+    logger.info("Weekly Retraining Complete!")
+    logger.info("="*80)
+    logger.info("\nModels updated:")
+    logger.info("  - stock/ml_enhanced/models/stock_selector_cup.pkl")
+    logger.info("  - stock/ml_enhanced/models/stock_selector_htf.pkl")
+    logger.info("  - stock/ml_enhanced/models/stock_selector_vcp.pkl")
+    logger.info("  - stock/ml_enhanced/models/position_sizer_*.pkl")
+    logger.info("  - stock/ml_enhanced/models/feature_info.pkl")
+    logger.info("  - stock/ml_enhanced/results/ml_backtest_final.csv")
+    logger.info("  - stock/ml_enhanced/results/ml_backtest_final.md")
+    logger.info("\nNext steps:")
+    logger.info("  - New models will be used in tomorrow's daily scan")
+    logger.info("  - Monitor performance in daily reports")
 
 if __name__ == "__main__":
     main()

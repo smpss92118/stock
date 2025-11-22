@@ -3,10 +3,17 @@ import numpy as np
 import pandas as pd
 import os
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta # Added timedelta
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
-import os
+
+# Add project root to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(project_root)
+
+# Import logger
+from src.utils.logger import setup_logger
+logger = setup_logger('run_backtest')
 
 # 設定檔案路徑
 PATTERN_FILE = os.path.join(os.path.dirname(__file__), '../data/processed/pattern_analysis_result.csv')
@@ -21,7 +28,7 @@ POSITION_SIZE_PCT = 0.10  # 10% per trade (100k)
 RISK_FREE_RATE = 0.02     # For Sharpe Ratio
 
 def load_data_polars():
-    print("Loading data with Polars...", flush=True)
+    logger.debug("Loading pattern analysis data")
     try:
         df = pl.read_csv(
             PATTERN_FILE,
@@ -29,7 +36,7 @@ def load_data_polars():
             infer_schema_length=10000
         )
     except Exception as e:
-        print(f"Error loading file: {e}")
+        logger.error(f"Failed to load pattern data: {e}")
         return None
     
     # Cast numeric columns
@@ -45,8 +52,25 @@ def load_data_polars():
         pl.col("close").rolling_mean(window_size=50).over("sid").alias("ma50")
     ])
     
-    print(f"Data loaded: {df.shape[0]:,} rows. Columns: {df.columns}", flush=True)
+    logger.debug(f"Loaded {df.shape[0]:,} rows, {len(df.columns)} columns")
     return df
+
+# --- Helpers for Costs & Slippage ---
+FEE_RATE = 0.001
+TAX_RATE = 0.003
+
+def get_tick_size(price):
+    if price < 10: return 0.01
+    elif price < 50: return 0.05
+    elif price < 100: return 0.1
+    elif price < 500: return 0.5
+    elif price < 1000: return 1.0
+    else: return 5.0
+
+def calculate_net_pnl(buy_price, sell_price):
+    cost = buy_price * (1 + FEE_RATE)
+    proceeds = sell_price * (1 - FEE_RATE - TAX_RATE)
+    return (proceeds - cost) / cost
 
 # --- Core Engine: Trade Extractor ---
 # 負責計算「每一筆」符合訊號的交易的進出場時間與損益，不考慮資金限制
@@ -81,9 +105,11 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
     
     candidates = []
     
-    for sid, sigs_df in sig_partitions.items():
-        if sid not in all_partitions: continue
-        stock_df = all_partitions[sid]
+    for sid_key, sigs_df in sig_partitions.items():
+        if sid_key not in all_partitions: continue
+        stock_df = all_partitions[sid_key]
+        
+        sid = sid_key[0] if isinstance(sid_key, tuple) else sid_key
         
         # Convert to numpy/list for fast indexing
         high_np = stock_df["high"].to_numpy()
@@ -99,7 +125,12 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
         for sig in sigs_df.to_dicts():
             buy = sig[buy_col]
             stop = sig[stop_col]
-            risk = buy - stop
+            
+            # 1. Apply Slippage to Entry
+            entry_tick = get_tick_size(buy)
+            real_buy = buy + entry_tick
+            
+            risk = real_buy - stop
             if risk <= 0: continue
                 
             # Find signal index
@@ -119,7 +150,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
             future_high = high_np[sig_idx + 1 : future_end]
             if len(future_high) == 0: continue
             
-            entry_candidates_idx = np.where(future_high >= buy)[0]
+            entry_candidates_idx = np.where(future_high >= real_buy)[0]
             if entry_candidates_idx.size == 0: continue
             
             entry_rel = entry_candidates_idx[0]
@@ -129,12 +160,13 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
             # 2. Exit Logic
             pnl = 0.0
             exit_abs = -1
+            raw_exit_price = 0.0
             
             # --- Logic A: Fixed Target / Time ---
             if exit_mode == 'fixed':
                 r_mult = params['r_mult']
                 time_exit = params['time_exit']
-                target = buy + risk * r_mult
+                target = real_buy + risk * r_mult
                 
                 path_end = len(high_np)
                 if time_exit is not None:
@@ -142,6 +174,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                 
                 path_high = high_np[entry_abs:path_end]
                 path_low = low_np[entry_abs:path_end]
+                path_close = close_np[entry_abs:path_end]
                 
                 # Check hits
                 stop_hits = np.where(path_low <= stop)[0]
@@ -153,17 +186,17 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                 if np.isinf(stop_i) and np.isinf(target_i):
                     # Time exit
                     exit_abs = path_end - 1
-                    pnl = (close_np[exit_abs] - buy) / buy
+                    raw_exit_price = path_close[-1]
                 elif stop_i < target_i:
                     exit_abs = entry_abs + int(stop_i)
-                    pnl = (stop - buy) / buy
+                    raw_exit_price = stop
                 else:
                     exit_abs = entry_abs + int(target_i)
-                    pnl = (target - buy) / buy
+                    raw_exit_price = target
 
             # --- Logic B: Dynamic Trailing Stop ---
             elif exit_mode == 'trailing':
-                trigger_price = buy + risk * params['trigger_r']
+                trigger_price = real_buy + risk * params['trigger_r']
                 current_stop = stop
                 trailing_active = False
                 
@@ -182,7 +215,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                     
                     # 1. Check Stop Hit
                     if l <= current_stop:
-                        pnl = (current_stop - buy) / buy
+                        raw_exit_price = current_stop
                         exit_abs = entry_abs + k
                         exit_found = True
                         break
@@ -190,7 +223,7 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                     # 2. Check Trigger (Activate Trail)
                     if not trailing_active and h >= trigger_price:
                         trailing_active = True
-                        current_stop = buy # Move to Breakeven immediately
+                        current_stop = real_buy # Move to Breakeven immediately
                     
                     # 3. Update Trail
                     if trailing_active:
@@ -201,11 +234,20 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
                 if not exit_found:
                     # Held until end of data
                     exit_abs = len(path_high) - 1 + entry_abs
-                    pnl = (path_close[-1] - buy) / buy
+                    raw_exit_price = path_close[-1]
 
             # Add candidate
             if exit_abs != -1:
+                # 3. Apply Slippage to Exit
+                exit_tick = get_tick_size(raw_exit_price)
+                real_exit = raw_exit_price - exit_tick
+                
+                # 4. Calculate Net PnL
+                pnl = calculate_net_pnl(real_buy, real_exit)
+                
                 candidates.append({
+                    'sid': sid,
+                    'buy_price': real_buy,
                     'entry_date': entry_date,
                     'exit_date': date_list[exit_abs],
                     'pnl': pnl,
@@ -218,7 +260,12 @@ def generate_trade_candidates(df, strategy, exit_mode, params):
 def run_capital_simulation(candidates, mode='limited'):
     """
     mode: 'limited' (100W, 10 pos) or 'unlimited'
+    
+    Note: No Pyramiding restriction REMOVED - same stock can have multiple positions
     """
+    if not candidates:
+        return []
+    
     # Sort by entry date is crucial for FIFO
     candidates.sort(key=lambda x: x['entry_date'])
     
@@ -235,7 +282,7 @@ def run_capital_simulation(candidates, mode='limited'):
             
     elif mode == 'limited':
         current_cash = INITIAL_CAPITAL
-        active_positions = [] # list of {'exit_date': date, 'cost': float, 'current_value': float}
+        active_positions = [] # list of {'sid', 'exit_date', 'cost', 'return_cash'}
         
         for t in candidates:
             today = t['entry_date']
@@ -258,6 +305,9 @@ def run_capital_simulation(candidates, mode='limited'):
             position_size = total_equity * POSITION_SIZE_PCT
             
             # 4. Try to Enter
+            # REMOVED: No Pyramiding check - allow same stock multiple times
+            # Only check: position limit and cash availability
+            
             if len(active_positions) < MAX_POSITIONS and current_cash >= position_size:
                 current_cash -= position_size
                 
@@ -265,6 +315,7 @@ def run_capital_simulation(candidates, mode='limited'):
                 return_cash = position_size + profit
                 
                 active_positions.append({
+                    'sid': t['sid'],
                     'exit_date': t['exit_date'],
                     'return_cash': return_cash,
                     'cost': position_size  # Track cost for equity calculation
@@ -334,6 +385,9 @@ def calculate_metrics(trades, scenario_name, settings_str):
     else:
         ann_ret = 0
         
+    # Average Holding Days
+    avg_holding_days = df['duration'].mean() if 'duration' in df.columns else 0
+
     return {
         'Strategy': scenario_name,
         'Settings': settings_str,
@@ -345,6 +399,7 @@ def calculate_metrics(trades, scenario_name, settings_str):
         'Sharpe': round(sharpe, 2),
         'Max Win Streak': int(max_win_streak) if not pd.isna(max_win_streak) else 0,
         'Max Loss Streak': int(max_loss_streak) if not pd.isna(max_loss_streak) else 0,
+        'Avg Holding Days': round(avg_holding_days, 1),
         'Total Profit': int(total_profit)
     }
 
@@ -401,7 +456,7 @@ def main():
                 params = {'trigger_r': trig, 'trail_ma': ma}
                 tasks.append((s, 'trailing', params))
                 
-    print(f"Running {len(tasks)} simulation tasks...")
+    logger.info(f"Running backtest: {len(tasks)} strategies")
     
     final_results = []
     with ProcessPoolExecutor(max_workers=min(os.cpu_count(), 6)) as ex:
@@ -412,7 +467,7 @@ def main():
                 res = fut.result()
                 final_results.extend(res)
             except Exception as e:
-                print(f"Task failed: {e}")
+                logger.error(f"Strategy failed: {e}")
                 
     if final_results:
         df_res = pd.DataFrame(final_results)
@@ -421,11 +476,12 @@ def main():
         df_res = df_res.sort_values(by=['Strategy', 'Sharpe'], ascending=[True, False])
         
         # Reorder columns
-        cols = ['Strategy', 'Settings', 'Ann. Return %', 'Return %', 'Sharpe', 'Trades', 'Win Rate']
+        cols = ['Strategy', 'Settings', 'Ann. Return %', 'Return %', 'Sharpe', 'Trades', 'Win Rate', 
+                'Avg Holding Days', 'Max DD %', 'Max Win Streak', 'Max Loss Streak']
         df_res = df_res[cols]
         
         df_res.to_csv(OUTPUT_FILE, index=False)
-        print(f"Saved CSV to {OUTPUT_FILE}")
+        logger.info(f"Backtest results saved: {os.path.basename(OUTPUT_FILE)}")
     
     with open(OUTPUT_REPORT, 'w') as f:
         f.write(f"# Backtest Report V2\nGenerated: {datetime.now()}\n\n")
@@ -434,9 +490,9 @@ def main():
         else:
              f.write("No trades generated.")
         
-    print("Report generated.")
+    logger.debug("Markdown report generated")
         
-    print(f"Total Time: {time.time() - start_t:.2f}s")
+    logger.info(f"Backtest completed in {time.time() - start_t:.1f}s")
 
 if __name__ == "__main__":
     main()

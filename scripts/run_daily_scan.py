@@ -13,10 +13,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from tqdm import tqdm
 from src.strategies.cup import detect_cup
 from src.strategies.htf import detect_htf
 from src.strategies.vcp import detect_vcp
 from src.utils.data_loader import loader
+from src.utils.logger import setup_logger
+
+logger = setup_logger('run_daily_scan')
 
 # 設定檔案路徑
 OUTPUT_CSV = os.path.join(os.path.dirname(__file__), '../data/processed/latest_signals.csv')
@@ -26,12 +30,12 @@ COL_NAMES = ['sid', 'name', 'date', 'open', 'high', 'low', 'close', 'volume']
 
 def load_data():
     """載入並準備數據 (使用 DataLoader)"""
-    print("載入數據 (最近 126 天)...", flush=True)
+    logger.info("載入最近 126 天數據")
     # Load slightly more than 126 days to ensure we have enough valid trading days
     df = loader.load_data(days=150) 
     
     if df.empty:
-        print("❌ 無法載入數據")
+        logger.error("無法載入數據")
         return None, None
         
     # 轉換數據類型
@@ -44,10 +48,10 @@ def load_data():
     
     # 獲取最新日期
     latest_date = df['date'].max().strftime('%Y-%m-%d')
-    print(f"最新數據日期: {latest_date}")
+    logger.info(f"最新日期: {latest_date}")
     
     # 計算 52 週報酬率和 RS Rating
-    print("計算 RS Ratings...", flush=True)
+    logger.debug("計算 RS Ratings")
     df['return_52w'] = df.groupby('sid')['close'].pct_change(periods=252)
     df['rs_rating'] = df.groupby('date')['return_52w'].transform(
         lambda x: x.rank(pct=True) * 100
@@ -68,7 +72,7 @@ def load_data():
     df.dropna(subset=['sid', 'date', 'close'], inplace=True)
     
     # 計算移動平均線
-    print("計算技術指標...", flush=True)
+    logger.debug("計算技術指標")
     df['ma50'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(50).mean())
     df['ma150'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(150).mean())
     df['ma200'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(200).mean())
@@ -81,19 +85,15 @@ def scan_latest_date(df):
     """掃描最新日期的股票"""
     # 找出最新日期
     latest_date = df['date'].max()
-    print(f"\n掃描日期: {latest_date}", flush=True)
+    logger.info(f"掃描 {len(df[df['date'] == latest_date]['sid'].unique())} 檔股票")
     
     # 獲取該日期的所有股票
     latest_stocks = df[df['date'] == latest_date]['sid'].unique()
-    print(f"股票數量: {len(latest_stocks)}", flush=True)
     
     signals = []
-    processed = 0
     
-    for sid in latest_stocks:
-        processed += 1
-        if processed % 100 == 0:
-            print(f"已處理 {processed}/{len(latest_stocks)} 檔股票...", flush=True)
+    # 使用 tqdm 顯示進度
+    for sid in tqdm(latest_stocks, desc="掃描股票", ncols=80):
         
         # 獲取該股票的歷史數據
         stock_df = df[df['sid'] == sid].reset_index(drop=True)
@@ -202,7 +202,7 @@ def scan_latest_date(df):
 def generate_report(signals, scan_date):
     """生成報告"""
     if not signals:
-        print("\n❌ 未發現符合條件的訊號")
+        logger.warning("未發現符合條件的訊號")
         # Create empty report
         with open(OUTPUT_REPORT, 'w', encoding='utf-8') as f:
             f.write(f"# 股票訊號報告\n")
@@ -210,7 +210,7 @@ def generate_report(signals, scan_date):
             f.write(f"**訊號數量**: 0\n\n")
             f.write("---\n\n")
             f.write("本日無符合條件的型態訊號。\n")
-        print(f"✅ 空報告已儲存至: {OUTPUT_REPORT}")
+        logger.info(f"空報告已儲存")
         
         # Create empty CSV with headers
         pd.DataFrame(columns=['date', 'sid', 'name', 'pattern', 'buy_price', 'stop_price', 'risk_pct', 'rs_rating', 'grade', 'current_price', 'distance_pct', 'status']).to_csv(OUTPUT_CSV, index=False)
@@ -221,7 +221,7 @@ def generate_report(signals, scan_date):
     
     # 儲存 CSV
     df_signals.to_csv(OUTPUT_CSV, index=False)
-    print(f"\n✅ 訊號已儲存至: {OUTPUT_CSV}")
+    logger.info(f"發現 {len(signals)} 個訊號")
     
     # 生成 Markdown 報告
     report_lines = []
@@ -262,19 +262,19 @@ def generate_report(signals, scan_date):
         report_lines.append("**註**: 距離% = 當前價距離買入價的百分比（負值代表已突破）\n")
         report_lines.append("---\n")
     
-    # 輸出到終端
-    print("\n" + "\n".join(report_lines))
+    # 輸出到終端（只顯示數量，不顯示完整報告）
+    logger.debug("報告內容已生成")
     
     # 儲存 Markdown
     with open(OUTPUT_REPORT, 'w', encoding='utf-8') as f:
         f.write("\n".join(report_lines))
-    print(f"✅ 報告已儲存至: {OUTPUT_REPORT}")
+    logger.info(f"報告已儲存: {os.path.basename(OUTPUT_REPORT)}")
 
 def main():
     """主程式"""
-    print("=" * 60)
-    print("每日股票訊號掃描器")
-    print("=" * 60)
+    logger.info("=" * 40)
+    logger.info("每日股票訊號掃描開始")
+    logger.info("=" * 40)
     
     # 1. 載入數據
     result = load_data()
@@ -290,9 +290,9 @@ def main():
     # 生成報告
     generate_report(signals, scan_date)
     
-    print("\n" + "=" * 60)
-    print("掃描完成！")
-    print("=" * 60)
+    logger.info("=" * 40)
+    logger.info("掃描完成")
+    logger.info("=" * 40)
 
 if __name__ == "__main__":
     main()

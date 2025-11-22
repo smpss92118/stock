@@ -32,10 +32,18 @@ from src.strategies.htf import detect_htf
 from src.strategies.cup import detect_cup
 from src.strategies.vcp import detect_vcp
 
+# Import shared modules
+from src.utils.logger import setup_logger
+from src.ml.features import extract_ml_features
+
 # Configuration
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models/stock_selector.pkl')
 FEATURE_INFO_PATH = os.path.join(os.path.dirname(__file__), 'models/feature_info.pkl')
 OUTPUT_BASE = os.path.join(os.path.dirname(__file__), 'daily_reports')
+BACKTEST_RESULTS_PATH = os.path.join(os.path.dirname(__file__), 'results/ml_backtest_final.csv')
+
+# Setup Logger
+logger = setup_logger('daily_ml_scanner')
 
 def load_ml_model():
     """載入 ML 模型"""
@@ -44,43 +52,23 @@ def load_ml_model():
             model = pickle.load(f)
         with open(FEATURE_INFO_PATH, 'rb') as f:
             feature_info = pickle.load(f)
+        logger.info(f"ML 模型載入完成，特徵數: {len(feature_info.get('feature_cols', []))}")
         return model, feature_info['feature_cols']
     except Exception as e:
-        print(f"⚠️ ML 模型載入失敗: {e}")
+        logger.error(f"⚠️ ML 模型載入失敗: {e}")
         return None, None
 
-def calculate_ml_features(row, pattern_type):
-    """計算 ML 特徵 (簡化版)"""
-    buy_price = row.get(f'{pattern_type}_buy_price', 0)
-    stop_price = row.get(f'{pattern_type}_stop_price', 0)
-    current_price = row['close']
-    
-    # Grade
-    if pattern_type == 'htf':
-        grade = row.get('htf_grade', 'C')
-        grade_map = {'A': 3, 'B': 2, 'C': 1}
-        grade_numeric = grade_map.get(grade, 1)
-    else:
-        grade_numeric = 2
-    
-    # Calculate features
-    distance_to_buy_pct = (buy_price - current_price) / current_price * 100 if buy_price > 0 else 0
-    risk_pct = (buy_price - stop_price) / buy_price * 100 if buy_price > 0 and stop_price > 0 else 0
-    
-    features = {
-        'grade_numeric': grade_numeric,
-        'distance_to_buy_pct': distance_to_buy_pct,
-        'risk_pct': risk_pct,
-        'rsi_14': 50,  # Simplified
-        'ma_trend': 1,
-        'volatility': 0.02,
-        'atr_ratio': 0.02,
-        'market_trend': 1,
-        'signal_count_ma10': 0,
-        'signal_count_ma60': 0
-    }
-    
-    return features
+def load_backtest_results():
+    """載入回測結果"""
+    try:
+        if not os.path.exists(BACKTEST_RESULTS_PATH):
+            return None
+        
+        df = pd.read_csv(BACKTEST_RESULTS_PATH)
+        return df
+    except Exception as e:
+        logger.error(f"⚠️ 回測結果載入失敗: {e}")
+        return None
 
 def predict_signal_quality(model, feature_cols, features_dict):
     """預測訊號品質"""
@@ -92,16 +80,16 @@ def predict_signal_quality(model, feature_cols, features_dict):
         proba = model.predict_proba(X)[0][1]
         return proba
     except Exception as e:
-        print(f"    ⚠️ ML 預測失敗: {e}")
+        logger.warning(f"    ⚠️ ML 預測失敗: {e}")
         return 0.5
 
 def scan_with_ml(df, model, feature_cols):
     """掃描並添加 ML 評分"""
     latest_date = df['date'].max()
-    print(f"\n掃描日期: {latest_date}")
+    logger.info(f"\n掃描日期: {latest_date}")
     
     latest_stocks = df[df['date'] == latest_date]['sid'].unique()
-    print(f"股票數量: {len(latest_stocks)}")
+    logger.info(f"股票數量: {len(latest_stocks)}")
     
     signals = []
     processed = 0
@@ -109,7 +97,7 @@ def scan_with_ml(df, model, feature_cols):
     for sid in latest_stocks:
         processed += 1
         if processed % 100 == 0:
-            print(f"已處理 {processed}/{len(latest_stocks)} 檔股票...")
+            logger.info(f"已處理 {processed}/{len(latest_stocks)} 檔股票...")
         
         stock_df = df[df['sid'] == sid].reset_index(drop=True)
         n_rows = len(stock_df)
@@ -133,12 +121,17 @@ def scan_with_ml(df, model, feature_cols):
         }
         
         rs_rating = row_today.get('rs_rating', 0)
-        high_52w = row_today.get('high_52w', row_today['high'])
         
         # Detect HTF
         is_htf, htf_buy, htf_stop, htf_grade = detect_htf(window, rs_rating=rs_rating)
         if is_htf and htf_buy and htf_stop and row_today['close'] > htf_stop:
-            features = calculate_ml_features(row_today, 'htf')
+            # Add temporary pattern info to row for feature extraction
+            row_today_htf = row_today.copy()
+            row_today_htf['htf_buy_price'] = htf_buy
+            row_today_htf['htf_stop_price'] = htf_stop
+            row_today_htf['htf_grade'] = htf_grade
+            
+            features = extract_ml_features(row_today_htf, 'htf')
             ml_proba = predict_signal_quality(model, feature_cols, features)
             
             signals.append({
@@ -160,7 +153,12 @@ def scan_with_ml(df, model, feature_cols):
         # Detect CUP
         is_cup, cup_buy, cup_stop = detect_cup(window, ma_info, rs_rating=rs_rating)
         if is_cup and cup_buy and cup_stop and row_today['close'] > cup_stop:
-            features = calculate_ml_features(row_today, 'cup')
+            # Add temporary pattern info to row for feature extraction
+            row_today_cup = row_today.copy()
+            row_today_cup['cup_buy_price'] = cup_buy
+            row_today_cup['cup_stop_price'] = cup_stop
+            
+            features = extract_ml_features(row_today_cup, 'cup')
             ml_proba = predict_signal_quality(model, feature_cols, features)
             
             signals.append({
@@ -178,10 +176,106 @@ def scan_with_ml(df, model, feature_cols):
                 'ml_selected': ml_proba >= 0.4,
                 'rs_rating': round(rs_rating, 1)
             })
+
+        # Detect VCP
+        vol_ma50 = window['volume'].rolling(50).mean().iloc[-1] if len(window) >= 50 else window['volume'].mean()
+        is_vcp, vcp_buy, vcp_stop = detect_vcp(window, vol_ma50_val=vol_ma50, price_ma50_val=ma_info['ma50'], rs_rating=rs_rating)
+        if is_vcp and vcp_buy and vcp_stop and row_today['close'] > vcp_stop:
+            # Add temporary pattern info to row for feature extraction
+            row_today_vcp = row_today.copy()
+            row_today_vcp['vcp_buy_price'] = vcp_buy
+            row_today_vcp['vcp_stop_price'] = vcp_stop
+            
+            features = extract_ml_features(row_today_vcp, 'vcp')
+            ml_proba = predict_signal_quality(model, feature_cols, features)
+            
+            signals.append({
+                'date': latest_date,
+                'sid': sid,
+                'name': row_today['name'],
+                'pattern': 'VCP',
+                'buy_price': round(vcp_buy, 2),
+                'stop_price': round(vcp_stop, 2),
+                'risk_pct': round((vcp_buy - vcp_stop) / vcp_buy * 100, 2),
+                'grade': 'N/A',
+                'current_price': round(row_today['close'], 2),
+                'distance_pct': round((vcp_buy - row_today['close']) / vcp_buy * 100, 2),
+                'ml_proba': round(ml_proba, 3),
+                'ml_selected': ml_proba >= 0.4,
+                'rs_rating': round(rs_rating, 1)
+            })
     
+    total_signals = len(signals)
+    ml_kept = sum(1 for s in signals if s['ml_selected'])
+    logger.info(f"掃描完成: 總訊號 {total_signals}, ML≥0.4 {ml_kept}, 處理股票 {processed}")
     return signals, latest_date
 
-def generate_ml_report(signals, scan_date, df_full=None):
+def scan_past_week(df, model, feature_cols, latest_date):
+    """掃描過去一週的訊號並加上 ML 評分"""
+    from datetime import timedelta
+    
+    today = pd.to_datetime(latest_date)
+    start_date = today - timedelta(days=7)
+    
+    # Filter for past 7 days (excluding today to avoid duplication if needed, but report separates them)
+    # Actually report "Past Week" usually implies history excluding today, or including?
+    # The original code used: df_week = df_full[pd.to_datetime(df_full['date']) >= start_date]
+    # Let's keep it simple: Past 7 days excluding today for "Past Week" section
+    
+    mask = (pd.to_datetime(df['date']) >= start_date) & (pd.to_datetime(df['date']) < today)
+    df_week = df[mask].copy()
+    
+    past_signals = []
+    
+    if df_week.empty:
+        return past_signals
+        
+    # Iterate over patterns
+    patterns = ['htf', 'cup', 'vcp']
+    
+    for pat in patterns:
+        col_name = f'is_{pat}'
+        if col_name not in df_week.columns:
+            continue
+            
+        # Filter rows with this pattern
+        pat_df = df_week[df_week[col_name] == True].copy()
+        
+        for _, row in pat_df.iterrows():
+            # Basic validation
+            buy_col = f'{pat}_buy_price'
+            stop_col = f'{pat}_stop_price'
+            
+            if pd.isna(row.get(buy_col)) or pd.isna(row.get(stop_col)):
+                continue
+                
+            # Extract features
+            # Note: row must have necessary columns. extract_ml_features handles missing gracefully usually.
+            # We need to ensure 'ma20', 'ma50' etc are present. load_data usually provides them.
+            
+            # Prepare row for feature extraction (needs specific format sometimes)
+            # extract_ml_features expects the row to have specific pattern columns set if we pass pattern_type
+            # It reads e.g. row['htf_buy_price'] which exists.
+            
+            features = extract_ml_features(row, pat)
+            ml_proba = predict_signal_quality(model, feature_cols, features)
+            
+            # Only keep if ML score is decent (e.g. >= 0.4) to show "High Quality" past signals
+            if ml_proba >= 0.4:
+                past_signals.append({
+                    'date': pd.to_datetime(row['date']).strftime('%Y-%m-%d'),
+                    'sid': row['sid'],
+                    'name': row.get('name', ''),
+                    'pattern': pat.upper(),
+                    'buy_price': round(row[buy_col], 2),
+                    'stop_price': round(row[stop_col], 2),
+                    'ml_proba': round(ml_proba, 3),
+                    'grade': row.get(f'{pat}_grade', 'N/A')
+                })
+    
+    return past_signals
+
+def generate_ml_report(signals, scan_date, df_full=None, past_signals=None):
     """生成 ML 增強報告（即使今日無訊號也生成）"""
     
     # 創建輸出目錄
@@ -231,7 +325,7 @@ def generate_ml_report(signals, scan_date, df_full=None):
             htf_ml = ml_selected[ml_selected['pattern'] == 'HTF'].sort_values('ml_proba', ascending=False)
             if not htf_ml.empty:
                 f.write(f"### 🚀 HTF 型態 ({len(htf_ml)} 檔)\n\n")
-                f.write("**推薦策略**: Trailing Stop (1.5R trigger, MA20)\n\n")
+                f.write("**推薦策略**: Fixed Exit (R=2.0, T=20)\n\n")
                 f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | Grade | ML分數 | RS Rating |\n")
                 f.write("|---------|---------|--------|--------|--------|-------|-------|--------|----------|\n")
                 for _, row in htf_ml.iterrows():
@@ -244,10 +338,23 @@ def generate_ml_report(signals, scan_date, df_full=None):
             cup_ml = ml_selected[ml_selected['pattern'] == 'CUP'].sort_values('ml_proba', ascending=False)
             if not cup_ml.empty:
                 f.write(f"### 🏆 CUP 型態 ({len(cup_ml)} 檔)\n\n")
-                f.write("**推薦策略**: Fixed Exit (R=2.0, T=20 或 R=3.0, T=20)\n\n")
+                f.write("**推薦策略**: Fixed Exit (R=3.0, T=20)\n\n")
                 f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | ML分數 | RS Rating |\n")
                 f.write("|---------|---------|--------|--------|--------|-------|--------|----------|\n")
                 for _, row in cup_ml.iterrows():
+                    f.write(f"| **{row['sid']}** | {row['name']} | {row['current_price']} | ")
+                    f.write(f"{row['buy_price']} | {row['stop_price']} | {row['distance_pct']}% | ")
+                    f.write(f"**{row['ml_proba']}** | {row['rs_rating']} |\n")
+                f.write("\n")
+
+            # VCP 推薦
+            vcp_ml = ml_selected[ml_selected['pattern'] == 'VCP'].sort_values('ml_proba', ascending=False)
+            if not vcp_ml.empty:
+                f.write(f"### 🌀 VCP 型態 ({len(vcp_ml)} 檔)\n\n")
+                f.write("**推薦策略**: Trailing Stop (1.5R trigger, MA20)\n\n")
+                f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | ML分數 | RS Rating |\n")
+                f.write("|---------|---------|--------|--------|--------|-------|--------|----------|\n")
+                for _, row in vcp_ml.iterrows():
                     f.write(f"| **{row['sid']}** | {row['name']} | {row['current_price']} | ")
                     f.write(f"{row['buy_price']} | {row['stop_price']} | {row['distance_pct']}% | ")
                     f.write(f"**{row['ml_proba']}** | {row['rs_rating']} |\n")
@@ -281,114 +388,125 @@ def generate_ml_report(signals, scan_date, df_full=None):
                     f.write(f"| {row['sid']} | {row['current_price']} | {row['buy_price']} | ")
                     f.write(f"{row['stop_price']} | {row['ml_proba']} |\n")
                 f.write("\n")
+
+            # VCP 其他
+            vcp_other = ml_rejected[ml_rejected['pattern'] == 'VCP'].sort_values('ml_proba', ascending=False)
+            if not vcp_other.empty:
+                f.write(f"### VCP 型態 ({len(vcp_other)} 檔)\n\n")
+                f.write("| 股票代號 | 當前價 | 買入價 | 停損價 | ML分數 |\n")
+                f.write("|---------|--------|--------|--------|--------|\n")
+                for _, row in vcp_other.iterrows():
+                    f.write(f"| {row['sid']} | {row['current_price']} | {row['buy_price']} | ")
+                    f.write(f"{row['stop_price']} | {row['ml_proba']} |\n")
+                f.write("\n")
         
         f.write("---\n\n")
         
-        # 過去一週訊號彙整
-        if df_full is not None:
-            f.write("## 📅 過去一週訊號彙整\n\n")
-            try:
-                from datetime import timedelta
-                today = pd.to_datetime(scan_date)
-                start_date = today - timedelta(days=7)
+        # 過去一週訊號彙整 (ML Enhanced)
+        f.write("## 📅 過去一週訊號彙整 (ML Enhanced)\n\n")
+        if past_signals:
+            f.write("> 僅顯示 ML 分數 ≥ 0.4 的高品質歷史訊號\n\n")
+            
+            df_past = pd.DataFrame(past_signals)
+            
+            # HTF
+            htf_past = df_past[df_past['pattern'] == 'HTF'].sort_values(['date', 'ml_proba'], ascending=[False, False])
+            if not htf_past.empty:
+                f.write(f"### 🚀 HTF ({len(htf_past)} 檔)\n\n")
+                f.write("| 日期 | 股票代號 | 買入價 | 停損價 | Grade | ML分數 |\n")
+                f.write("|------|---------|--------|--------|-------|--------|\n")
+                for _, row in htf_past.iterrows():
+                    f.write(f"| {row['date']} | {row['sid']} | {row['buy_price']} | {row['stop_price']} | {row['grade']} | **{row['ml_proba']}** |\n")
+                f.write("\n")
+            
+            # CUP
+            cup_past = df_past[df_past['pattern'] == 'CUP'].sort_values(['date', 'ml_proba'], ascending=[False, False])
+            if not cup_past.empty:
+                f.write(f"### 🏆 CUP ({len(cup_past)} 檔)\n\n")
+                f.write("| 日期 | 股票代號 | 買入價 | 停損價 | ML分數 |\n")
+                f.write("|------|---------|--------|--------|--------|\n")
+                for _, row in cup_past.iterrows():
+                    f.write(f"| {row['date']} | {row['sid']} | {row['buy_price']} | {row['stop_price']} | **{row['ml_proba']}** |\n")
+                f.write("\n")
                 
-                df_week = df_full[pd.to_datetime(df_full['date']) >= start_date].copy()
+            # VCP
+            vcp_past = df_past[df_past['pattern'] == 'VCP'].sort_values(['date', 'ml_proba'], ascending=[False, False])
+            if not vcp_past.empty:
+                f.write(f"### 🌀 VCP ({len(vcp_past)} 檔)\n\n")
+                f.write("| 日期 | 股票代號 | 買入價 | 停損價 | ML分數 |\n")
+                f.write("|------|---------|--------|--------|--------|\n")
+                for _, row in vcp_past.iterrows():
+                    f.write(f"| {row['date']} | {row['sid']} | {row['buy_price']} | {row['stop_price']} | **{row['ml_proba']}** |\n")
+                f.write("\n")
                 
-                if not df_week.empty:
-                    weekly_signals = []
-                    
-                    # HTF signals - check if column exists
-                    if 'is_htf' in df_week.columns:
-                        htf_df = df_week[df_week['is_htf'] == True].copy()
-                        for _, row in htf_df.iterrows():
-                            if pd.notna(row.get('htf_buy_price')) and pd.notna(row.get('htf_stop_price')):
-                                weekly_signals.append({
-                                    'date': pd.to_datetime(row['date']).strftime('%Y-%m-%d'),
-                                    'sid': row['sid'],
-                                    'name': row.get('name', ''),
-                                    'pattern': 'HTF',
-                                    'buy_price': round(row['htf_buy_price'], 2),
-                                    'stop_price': round(row['htf_stop_price'], 2),
-                                    'grade': row.get('htf_grade', 'N/A')
-                                })
-                    
-                    # CUP signals - check if column exists
-                    if 'is_cup' in df_week.columns:
-                        cup_df = df_week[df_week['is_cup'] == True].copy()
-                        for _, row in cup_df.iterrows():
-                            if pd.notna(row.get('cup_buy_price')) and pd.notna(row.get('cup_stop_price')):
-                                weekly_signals.append({
-                                    'date': pd.to_datetime(row['date']).strftime('%Y-%m-%d'),
-                                    'sid': row['sid'],
-                                    'name': row.get('name', ''),
-                                    'pattern': 'CUP',
-                                    'buy_price': round(row['cup_buy_price'], 2),
-                                    'stop_price': round(row['cup_stop_price'], 2),
-                                    'grade': 'N/A'
-                                })
-                    
-                    if weekly_signals:
-                        df_weekly = pd.DataFrame(weekly_signals)
-                        
-                        # HTF weekly
-                        htf_weekly = df_weekly[df_weekly['pattern'] == 'HTF']
-                        if not htf_weekly.empty:
-                            f.write(f"### 🚀 HTF 型態訊號 ({len(htf_weekly)} 檔)\n\n")
-                            f.write("| 日期 | 股票代號 | 買入價 | 停損價 | Grade |\n")
-                            f.write("|------|---------|--------|--------|-------|\n")
-                            for _, row in htf_weekly.iterrows():
-                                f.write(f"| {row['date']} | {row['sid']} | {row['buy_price']} | {row['stop_price']} | {row['grade']} |\n")
-                            f.write("\n")
-                        
-                        # CUP weekly
-                        cup_weekly = df_weekly[df_weekly['pattern'] == 'CUP']
-                        if not cup_weekly.empty:
-                            f.write(f"### 🏆 CUP 型態訊號 ({len(cup_weekly)} 檔)\n\n")
-                            f.write("| 日期 | 股票代號 | 買入價 | 停損價 |\n")
-                            f.write("|------|---------|--------|--------|\n")
-                            for _, row in cup_weekly.iterrows():
-                                f.write(f"| {row['date']} | {row['sid']} | {row['buy_price']} | {row['stop_price']} |\n")
-                            f.write("\n")
-                        
-                        f.write(f"**統計**: 共 {len(df_weekly)} 個訊號來自過去 7 天\n\n")
-                    else:
-                        f.write("過去一週無符合條件的訊號。\n\n")
-                else:
-                    f.write("過去一週無數據記錄。\n\n")
-            except Exception as e:
-                print(f"⚠️ 讀取歷史訊號錯誤: {e}")
-                f.write(f"⚠️ 讀取歷史訊號時發生錯誤: {str(e)}\n\n")
+        else:
+            f.write("過去一週無 ML ≥ 0.4 的高品質訊號。\n\n")
+            
+        f.write("---\n\n")
+        
+        # Top Strategies (Dynamic)
+        backtest_df = load_backtest_results()
+        if backtest_df is not None and not backtest_df.empty:
+            f.write("## 🏆 Top 3 Strategies (ML-Enhanced)\n\n")
+            
+            # Sort by Annual Return
+            top_strategies = backtest_df.sort_values('Ann. Return %', ascending=False).head(3)
+            
+            f.write("### 依年化報酬排序\n\n")
+            for i, (_, row) in enumerate(top_strategies.iterrows(), 1):
+                strategy_name = row['Strategy']
+                ann_ret = row['Ann. Return %']
+                sharpe = row['Sharpe']
+                avg_hold = row.get('Avg Holding Days', 'N/A')
+                max_win = row.get('Max Win Streak', 'N/A')
+                max_loss = row.get('Max Loss Streak', 'N/A')
+                mdd = row.get('Max DD %', 'N/A')
+                win_rate = row.get('Win Rate', 'N/A')
+                
+                f.write(f"{i}. **{strategy_name}**\n")
+                f.write(f"   - 年化報酬: **{ann_ret}%**, Sharpe: **{sharpe}**, 勝率: {win_rate}%\n")
+                f.write(f"   - 平均持倉: {avg_hold} 天, MDD: {mdd}%\n")
+                f.write(f"   - 連勝/連敗: {max_win} / {max_loss}\n\n")
+
+            # Sort by Sharpe
+            top_sharpe = backtest_df.sort_values('Sharpe', ascending=False).head(3)
+            f.write("### 依 Sharpe 排序\n\n")
+            for i, (_, row) in enumerate(top_sharpe.iterrows(), 1):
+                strategy_name = row['Strategy']
+                ann_ret = row['Ann. Return %']
+                sharpe = row['Sharpe']
+                avg_hold = row.get('Avg Holding Days', 'N/A')
+                max_win = row.get('Max Win Streak', 'N/A')
+                max_loss = row.get('Max Loss Streak', 'N/A')
+                mdd = row.get('Max DD %', 'N/A')
+                win_rate = row.get('Win Rate', 'N/A')
+                
+                f.write(f"{i}. **{strategy_name}**\n")
+                f.write(f"   - Sharpe: **{sharpe}**, 年化報酬: **{ann_ret}%**, 勝率: {win_rate}%\n")
+                f.write(f"   - 平均持倉: {avg_hold} 天, MDD: {mdd}%\n")
+                f.write(f"   - 連勝/連敗: {max_win} / {max_loss}\n\n")
             
             f.write("---\n\n")
-        
-        # Top Strategies
-        f.write("## 🏆 Top 3 Strategies (ML-Enhanced)\n\n")
-        f.write("### 依年化報酬排序\n\n")
-        f.write("1. **CUP Fixed (R=2.0, T=20) + ML 0.4**: 年化 171.1%, Sharpe 2.99\n")
-        f.write("2. **HTF Trailing (1.5R, MA20) 原始**: 年化 153.4%, Sharpe 1.19\n")
-        f.write("3. **HTF Fixed (R=2.0, T=20) + ML 0.4**: 年化 145.5%, Sharpe 2.87\n\n")
-        
-        f.write("### 依 Sharpe Ratio 排序\n\n")
-        f.write("1. **CUP Fixed (R=2.0, T=20) + ML 0.4**: Sharpe 2.99, 年化 171.1%\n")
-        f.write("2. **HTF Fixed (R=2.0, T=20) + ML 0.4**: Sharpe 2.87, 年化 145.5%\n")
-        f.write("3. **CUP Fixed (R=3.0, T=20) + ML 0.4**: Sharpe 2.62, 年化 193.5%\n\n")
-        
-        f.write("---\n\n")
+        else:
+            # Fallback if no backtest results
+            f.write("## 🏆 Top 3 Strategies (ML-Enhanced)\n\n")
+            f.write("> ⚠️ 無法載入最新回測結果，請檢查 ml_backtest_final.csv\n\n")
+            f.write("---\n\n")
         
         # 交易策略說明
         f.write("## 📖 交易策略說明\n\n")
-        f.write("### HTF Trailing Stop\n")
+        f.write("### HTF Fixed Exit (ML 推薦) ⭐\n")
         f.write("- **進場**: 價格突破買入價\n")
-        f.write("- **出場**: 1. 達到 1.5R 後啟動 MA20 追蹤止損  2. 跌破停損價\n")
-        f.write("- **預期**: 153-171% 年化報酬\n\n")
+        f.write("- **出場**: **固定 2R 停利** 或 20 天時間出場\n")
+        f.write("- **預期**: 221% 年化報酬, Sharpe 2.88 (ML enhanced)\n\n")
         f.write("### CUP Fixed Exit (ML 推薦) ⭐\n")
         f.write("- **進場**: 價格突破買入價\n")
-        f.write("- **出場**: 2R 目標或 20 天時間出場\n")
-        f.write("- **預期**: 171% 年化報酬, Sharpe 2.99 (ML enhanced)\n\n")
+        f.write("- **出場**: **固定 3R 停利** 或 20 天時間出場\n")
+        f.write("- **預期**: 138% 年化報酬, Sharpe 2.29 (ML enhanced)\n\n")
         f.write("### ML 分數解讀\n")
-        f.write("- **≥ 0.4**: 高品質訊號，勝率 70-78% ⭐\n")
-        f.write("- **0.3-0.4**: 中等品質，勝率 60-70%\n")
-        f.write("- **< 0.3**: 低品質，勝率 < 60%\n\n")
+        f.write("- **≥ 0.5**: **Elite (頂級)** - 歷史回測 Sharpe ~3.0，極高勝率 ⭐\n")
+        f.write("- **0.4-0.5**: **Strong (強力)** - 適合標準操作，期望值高\n")
+        f.write("- **0.3-0.4**: **Moderate (普通)** - 僅供觀察，風險較高\n\n")
     
     # 儲存 CSV (即使是空的也儲存)
     csv_path = os.path.join(output_dir, 'ml_signals.csv')
@@ -400,55 +518,64 @@ def generate_ml_report(signals, scan_date, df_full=None):
                               'risk_pct', 'grade', 'current_price', 'distance_pct', 
                               'ml_proba', 'ml_selected', 'rs_rating']).to_csv(csv_path, index=False)
     
-    print(f"\n✅ ML 報告已儲存至: {report_path}")
-    print(f"✅ CSV 已儲存至: {csv_path}")
+    logger.info(f"\n✅ ML 報告已儲存至: {report_path}")
+    logger.info(f"✅ CSV 已儲存至: {csv_path}")
     
     # 顯示摘要
-    print(f"\n{'='*60}")
-    print(f"ML 推薦訊號統計")
-    print(f"{'='*60}")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"ML 推薦訊號統計")
+    logger.info(f"{'='*60}")
     if not df_signals.empty:
-        print(f"HTF (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'HTF'])} 檔")
-        print(f"CUP (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'CUP'])} 檔")
-        print(f"總計推薦: {len(ml_selected)} 檔")
+        logger.info(f"HTF (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'HTF'])} 檔")
+        logger.info(f"CUP (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'CUP'])} 檔")
+        logger.info(f"VCP (ML ≥ 0.4): {len(ml_selected[ml_selected['pattern'] == 'VCP'])} 檔")
+        logger.info(f"總計推薦: {len(ml_selected)} 檔")
     else:
-        print(f"本日無訊號")
+        logger.info(f"本日無訊號")
 
 def main():
-    print("="*60)
-    print("ML-Enhanced Daily Stock Scanner")
-    print("="*60)
+    logger.info("="*60)
+    logger.info("ML-Enhanced Daily Stock Scanner")
+    logger.info("="*60)
     
     # 1. 更新數據
-    print("\n>>> 更新每日數據...")
+    logger.info("\n>>> 更新每日數據...")
     try:
         update_data()
     except Exception as e:
-        print(f"⚠️ 數據更新失敗: {e}")
+        logger.error(f"⚠️ 數據更新失敗: {e}")
     
     # 2. 載入 ML 模型
-    print("\n>>> 載入 ML 模型...")
+    logger.info("\n>>> 載入 ML 模型...")
     model, feature_cols = load_ml_model()
+    if model is None or feature_cols is None:
+        logger.error("❌ 模型或特徵列表載入失敗，停止流程。")
+        return
     
     # 3. 載入數據
-    print("\n>>> 載入股票數據...")
+    logger.info("\n>>> 載入股票數據...")
     result = load_data()
     if result is None:
-        print("❌ 數據載入失敗")
+        logger.error("❌ 數據載入失敗")
         return
     df, latest_date = result
+    logger.info(f"數據載入完成: {len(df)} 筆，股票 {df['sid'].nunique()} 檔，最新日期 {latest_date}")
     
     # 4. 掃描並評分
-    print("\n>>> 掃描股票訊號...")
+    logger.info("\n>>> 掃描股票訊號 (今日)...")
     signals, scan_date = scan_with_ml(df, model, feature_cols)
     
-    # 5. 生成報告
-    print("\n>>> 生成 ML 報告...")
-    generate_ml_report(signals, scan_date, df_full=df)
+    logger.info("\n>>> 掃描股票訊號 (過去一週)...")
+    past_signals = scan_past_week(df, model, feature_cols, latest_date)
+    logger.info(f"過去一週高品質訊號 (ML>=0.4): {len(past_signals)} 檔")
     
-    print("\n" + "="*60)
-    print("掃描完成！")
-    print("="*60)
+    # 5. 生成報告
+    logger.info("\n>>> 生成 ML 報告...")
+    generate_ml_report(signals, scan_date, df_full=df, past_signals=past_signals)
+    
+    logger.info("\n" + "="*60)
+    logger.info("掃描完成！")
+    logger.info("="*60)
 
 if __name__ == "__main__":
     main()
