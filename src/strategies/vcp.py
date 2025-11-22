@@ -17,32 +17,32 @@ def detect_vcp(window,
     vol = window['volume'].values
     
     n = len(window)
-    if n < 50: return False, np.nan, np.nan
+    if n < 50: return False, np.nan, np.nan, 0
 
     # 0. RS Filter (Cycle 4 - Relaxed from Cycle 8)
     # Require Stock to outperform Market (RS > 0)
     if rs_rating < 0:
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
     start_price = close[0]
-    if start_price == 0: return False, np.nan, np.nan
+    if start_price == 0: return False, np.nan, np.nan, 0
     
     # 0. Trend Filter: Price > MA50 (if available)
     if not np.isnan(price_ma50_val) and close[-1] < price_ma50_val:
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
     window_high = high.max()
     window_high_idx = high.argmax()
     
-    if window_high_idx < 10: return False, np.nan, np.nan
+    if window_high_idx < 10: return False, np.nan, np.nan, 0
         
     up = window_high / start_price - 1.0
     if up < min_up_ratio:
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
         
     # 1. ZigZag for Pivots
     pivots = get_zigzag_pivots(high, low, close, zigzag_threshold)
     if len(pivots) < 4: # Need at least 2 legs (High-Low-High-Low) -> 4 points
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
     # 2. Analyze Contractions (High -> Low)
     # Pivots: [{'index':, 'price':, 'type':}]
@@ -56,19 +56,19 @@ def detect_vcp(window,
             contractions.append(depth)
             
     if len(contractions) < 2: # Need at least 2 contractions for VCP
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
         
     # 2.1 Check Decreasing Volatility (Basic Damping)
     # Depths should generally decrease.
     if contractions[-1] > contractions[0]: # Simple check: Last shouldn't be larger than First
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
     # 4. Dry Up Check (Existing)
     # Last few days volume < 50% of MA50
     # We already have vol_dry_up_ratio=0.5
     recent_vol_mean = vol[-5:].mean()
     if recent_vol_mean > vol_ma50_val * vol_dry_up_ratio:
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
     # Buy Point: Last Pivot High
     # Find the last High pivot
@@ -80,7 +80,7 @@ def detect_vcp(window,
             last_high_price = p['price']
             break
             
-    if last_high_price == -1: return False, np.nan, np.nan
+    if last_high_price == -1: return False, np.nan, np.nan, 0
     
     # Stop Loss: Last Pivot Low
     last_low_price = -1
@@ -89,11 +89,12 @@ def detect_vcp(window,
             last_low_price = p['price']
             break
             
-    if last_low_price == -1: return False, np.nan, np.nan
+    if last_low_price == -1: return False, np.nan, np.nan, 0
     
     # Check if Price is near Buy Point (Breakout imminent)
     # Close should be close to Last High
     if close[-1] < last_high_price * 0.95: # Too far from pivot
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
-    return True, float(last_high_price), float(last_low_price)
+    vcp_len = n - window_high_idx
+    return True, float(last_high_price), float(last_low_price), int(vcp_len)

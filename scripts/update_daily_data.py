@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.crawlers.twse import TWSECrawler
 from src.crawlers.tpex import TPEXCrawler
+from src.crawlers.institutional import InstitutionalCrawler
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../data/raw')
 QUOTES_DIR = os.path.join(DATA_DIR, 'daily_quotes')
@@ -16,6 +17,8 @@ INST_DIR = os.path.join(DATA_DIR, 'institutional')
 MARKET_FILE = os.path.join(DATA_DIR, 'market_data.csv')
 
 def get_last_date(directory):
+    if not os.path.exists(directory):
+        return None
     files = sorted([f for f in os.listdir(directory) if f.endswith('.csv')])
     if not files:
         return None
@@ -39,10 +42,6 @@ def update_market_file(index_data):
         df = pd.DataFrame(columns=['date', 'close'])
         
     new_row = pd.DataFrame([{'date': index_data['date'], 'close': index_data['close']}])
-    # Append mode if file exists to avoid reading/writing huge file? 
-    # Market data is small, reading/writing is fine.
-    # But we need to preserve original columns if we just read/write.
-    # Actually, let's just append to file directly to be safe and simple.
     
     write_header = not os.path.exists(MARKET_FILE)
     new_row.to_csv(MARKET_FILE, mode='a', header=write_header, index=False)
@@ -51,6 +50,7 @@ def update_market_file(index_data):
 def main():
     crawler = TWSECrawler()
     tpex_crawler = TPEXCrawler()
+    inst_crawler = InstitutionalCrawler()
     
     # 1. Determine start date
     last_date = get_last_date(QUOTES_DIR)
@@ -91,18 +91,24 @@ def main():
             
         if not quotes_df.empty:
             # Save to CSV
+            if not os.path.exists(QUOTES_DIR):
+                os.makedirs(QUOTES_DIR)
             output_path = os.path.join(QUOTES_DIR, f"{formatted_date}.csv")
             quotes_df.to_csv(output_path, index=False)
             print(f"Saved quotes for {formatted_date} (Total: {len(quotes_df)})")
         else:
             print(f"No quotes data for {formatted_date} (Holiday?)")
             
-        # B. Fetch Institutional (Disabled per user request)
-        # inst_df = crawler.fetch_institutional(date_str)
-        # if inst_df is not None and not inst_df.empty:
-        #     output_path = os.path.join(INST_DIR, f"{formatted_date}.csv")
-        #     inst_df.to_csv(output_path, index=False)
-        #     print(f"Saved institutional data for {formatted_date}")
+        # B. Fetch Institutional
+        inst_df = inst_crawler.fetch_daily_data(formatted_date)
+        if inst_df is not None and not inst_df.empty:
+            # Ensure directory exists
+            if not os.path.exists(INST_DIR):
+                os.makedirs(INST_DIR)
+                
+            output_path = os.path.join(INST_DIR, f"{formatted_date}.csv")
+            inst_df.to_csv(output_path, index=False)
+            print(f"Saved institutional data for {formatted_date}")
             
         # C. Fetch Market Index
         index_data = crawler.fetch_market_index(date_str)

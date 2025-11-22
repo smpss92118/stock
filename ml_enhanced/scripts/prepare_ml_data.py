@@ -309,6 +309,14 @@ def main():
             features = extract_ml_features(row, pattern_type)
             if features is None: continue
             
+            if pattern_type == 'cup':
+                features['consolidation_days'] = row.get('cup_days', 10)
+            elif pattern_type == 'htf':
+                features['consolidation_days'] = row.get('htf_days', 5)
+            elif pattern_type == 'vcp':
+                features['consolidation_days'] = row.get('vcp_days', 10)
+            else:
+                features['consolidation_days'] = 0          
             # Create ONE row per exit mode
             for exit_mode in ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r']:
                 # Get label for this specific exit mode

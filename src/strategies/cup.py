@@ -13,11 +13,11 @@ def detect_cup(window,
     close = window['close'].values
     
     n = len(window)
-    if n < 40: return False, np.nan, np.nan
+    if n < 40: return False, np.nan, np.nan, 0
     
     # 0. RS Filter (Cycle 6)
     if rs_rating < 0:
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
     current_price = close[-1]
 
@@ -32,34 +32,34 @@ def detect_cup(window,
     
     try:
         if not (current_price > ma_info['ma50'] > ma_info['ma150'] > ma_info['ma200']):
-            return False, np.nan, np.nan
+            return False, np.nan, np.nan, 0
         if current_price < ma_info['low52'] * 1.25:
-            return False, np.nan, np.nan
+            return False, np.nan, np.nan, 0
     except:
-        return False, np.nan, np.nan # Missing MAs
+        return False, np.nan, np.nan, 0 # Missing MAs
 
     # 2. Cup Shape
     first_half = high[:n//2]
-    if len(first_half) == 0: return False, np.nan, np.nan
+    if len(first_half) == 0: return False, np.nan, np.nan, 0
     left_high_idx = first_half.argmax()
     left_high_price = first_half.max()
 
     mid_end = int(n*0.75)
     mid = close[left_high_idx:mid_end]
-    if len(mid) == 0: return False, np.nan, np.nan
+    if len(mid) == 0: return False, np.nan, np.nan, 0
 
     bottom_rel = mid.argmin()
     bottom_idx = left_high_idx + bottom_rel
     bottom_price = close[bottom_idx]
 
-    if left_high_price == 0: return False, np.nan, np.nan
+    if left_high_price == 0: return False, np.nan, np.nan, 0
     depth = 1.0 - bottom_price / left_high_price
     if not (min_depth <= depth <= max_depth):
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
     # 3. Handle Logic
     right = close[bottom_idx:]
-    if len(right) < 10: return False, np.nan, np.nan
+    if len(right) < 10: return False, np.nan, np.nan, 0
     right_high = right.max()
     
     handle_len = max(int(n * 0.2), 5)
@@ -73,7 +73,7 @@ def detect_cup(window,
     min_handle_low = bottom_price + 0.5 * cup_range
     
     if handle_low < min_handle_low:
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
         
     # Handle Drift (Price down, Vol down)
     # Simple check: Handle Close < Handle Open (Net down) AND Vol < Avg Vol?
@@ -84,10 +84,11 @@ def detect_cup(window,
     window_vol_mean = window['volume'].mean()
     
     if handle_vol_mean > window_vol_mean: # Vol expansion in handle is bad
-        return False, np.nan, np.nan
+        return False, np.nan, np.nan, 0
 
     buy_price = handle_high
     stop_price = handle_low
-    if stop_price >= buy_price: return False, np.nan, np.nan
+    if stop_price >= buy_price: return False, np.nan, np.nan, 0
 
-    return True, float(buy_price), float(stop_price)
+    cup_len = n - left_high_idx
+    return True, float(buy_price), float(stop_price), int(cup_len)
