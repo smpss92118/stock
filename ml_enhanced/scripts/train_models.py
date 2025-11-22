@@ -343,34 +343,58 @@ def train_pattern_model(pattern_type, df):
 
 def main():
     print("="*80)
-    print("ML Model Training (Pattern Specific)")
+    print("ML Model Training (Pattern × Exit Mode)")
     print("="*80)
     
     # 1. Load data
     df = load_and_prepare_data()
     
-    # 2. Train per pattern
+    # 2. Train per pattern × exit_mode combination
     patterns = ['cup', 'htf', 'vcp']
+    exit_modes = ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r']
     
     for pat in patterns:
-        selector, sizer = train_pattern_model(pat, df)
-        
-        if selector and sizer:
+        for exit_mode in exit_modes:
+            print(f"\n{'='*80}")
+            print(f"Training Model: {pat.upper()} + {exit_mode}")
+            print(f"{'='*80}")
+            
+            # Filter data for this specific combination
+            pattern_df = df[
+                (df['pattern_type'] == pat.upper()) &
+                (df['exit_mode'] == exit_mode)
+            ].copy()
+            
+            if len(pattern_df) < 50:
+                print(f"⚠️ Not enough data for {pat} + {exit_mode} (n={len(pattern_df)}). Skipping.")
+                continue
+                
+            print(f"Samples: {len(pattern_df)}")
+            
+            # Time split
+            train_df, test_df = time_based_split(pattern_df, test_size=0.2)
+            
+            # Train Selector
+            selector_model = train_stock_selector(train_df, test_df)
+            
+            # Train Sizer (Optional - we may skip sizer for now as we're focusing on selection)
+            # sizer_model = train_position_sizer(train_df, test_df)
+            
             # Save models
-            sel_path = os.path.join(MODEL_DIR, f'stock_selector_{pat}.pkl')
-            siz_path = os.path.join(MODEL_DIR, f'position_sizer_{pat}.pkl')
+            model_name = f'stock_selector_{pat}_{exit_mode}.pkl'
+            sel_path = os.path.join(MODEL_DIR, model_name)
             
             with open(sel_path, 'wb') as f:
-                pickle.dump(selector, f)
-            with open(siz_path, 'wb') as f:
-                pickle.dump(sizer, f)
+                pickle.dump(selector_model, f)
                 
-            print(f"✅ Saved models for {pat}")
+            print(f"✅ Saved: {model_name}")
 
-    # Save feature info (shared)
+    # Save feature info (shared across all models)
     feature_info = {
         'feature_cols': FEATURE_COLS,
-        'trained_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        'trained_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'patterns': patterns,
+        'exit_modes': exit_modes
     }
     with open(os.path.join(MODEL_DIR, 'feature_info.pkl'), 'wb') as f:
         pickle.dump(feature_info, f)
@@ -378,6 +402,10 @@ def main():
     print("\n" + "="*80)
     print("Training Complete!")
     print("="*80)
+    print(f"\nTrained {len(patterns) * len(exit_modes)} models:")
+    for pat in patterns:
+        for exit_mode in exit_modes:
+            print(f"  - stock_selector_{pat}_{exit_mode}.pkl")
 
 if __name__ == "__main__":
     main()

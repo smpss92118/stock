@@ -34,7 +34,7 @@ STOCK_INFO_FILE = os.path.join(os.path.dirname(__file__), '../../data/raw/2023_2
 # Setup Logger
 logger = setup_logger('prepare_ml_data')
 
-def simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_price):
+def simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_price, trigger_r=1.5):
     """
     Simulate trade with Trailing Stop (Trigger 1.5R, Trail MA20).
     Returns: pnl, duration
@@ -42,7 +42,7 @@ def simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_pr
     risk = buy_price - stop_price
     if risk <= 0: return 0.0, 1
     
-    trigger_price = buy_price + risk * 1.5
+    trigger_price = buy_price + risk * trigger_r
     current_stop = stop_price
     trailing_active = False
     
@@ -78,10 +78,51 @@ def simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_pr
     duration = max(exit_idx, 1) # Avoid 0
     return pnl, duration
 
+def simulate_trade_fixed(high_np, low_np, close_np, buy_price, stop_price, r_mult=2.0, time_exit=20):
+    """
+    Simulate trade with Fixed R-multiple Target and Time Exit.
+    Returns: pnl, duration
+    """
+    risk = buy_price - stop_price
+    if risk <= 0: return 0.0, 1
+    
+    target_price = buy_price + risk * r_mult
+    
+    # Limit path to time_exit
+    path_len = min(time_exit, len(high_np))
+    
+    exit_idx = -1
+    pnl = 0.0
+    
+    for k in range(path_len):
+        h = high_np[k]
+        l = low_np[k]
+        
+        # Check Stop Hit (priority 1)
+        if l <= stop_price:
+            pnl = (stop_price - buy_price) / buy_price
+            exit_idx = k
+            break
+        
+        # Check Target Hit (priority 2)
+        if h >= target_price:
+            pnl = (target_price - buy_price) / buy_price
+            exit_idx = k
+            break
+    
+    if exit_idx == -1:
+        # Time Exit
+        exit_idx = path_len - 1
+        pnl = (close_np[exit_idx] - buy_price) / buy_price
+    
+    duration = max(exit_idx + 1, 1)
+    return pnl, duration
+
 def generate_labels(df, pattern_type):
     """
     Generate labels based on Score = Profit% / Duration.
-    Uses Trailing Stop simulation.
+    NEW: Calculates for MULTIPLE exit strategies per signal.
+    Returns 3x data (one row per exit mode).
     """
     pattern_col = f'is_{pattern_type}'
     buy_col = f'{pattern_type}_buy_price'
@@ -94,16 +135,17 @@ def generate_labels(df, pattern_type):
         (df[stop_col].notna())
     ].copy()
     
-    trade_results = []
+    # Define exit modes
+    exit_modes = [
+        {'name': 'fixed_r2_t20', 'type': 'fixed', 'r_mult': 2.0, 'time_exit': 20},
+        {'name': 'fixed_r3_t20', 'type': 'fixed', 'r_mult': 3.0, 'time_exit': 20},
+        {'name': 'trailing_15r', 'type': 'trailing', 'trigger_r': 1.5}
+    ]
     
-    # Prepare data for fast access
-    # We need to group by sid to get full history for simulation
-    # But df passed here might be the full dataframe? Yes, load_data_polars returns full df.
-    # df is a pandas DataFrame here.
+    all_trade_results = {mode['name']: [] for mode in exit_modes}
     
-    # Ensure MA20 exists (it should be calculated in main)
+    # Ensure MA20 exists
     if 'ma20' not in df.columns:
-        # Fallback if not present (should be added in main)
         df['ma20'] = df.groupby('sid')['close'].transform(lambda x: x.rolling(20).mean())
 
     # Partition by SID for speed
@@ -119,13 +161,10 @@ def generate_labels(df, pattern_type):
         stock_df = df_groups[sid]
         
         # Get data AFTER signal
-        # We need to find where signal_date is
-        # Assuming sorted
         future_data = stock_df[stock_df['date'] > signal_date]
         if len(future_data) == 0: continue
         
         # Check Entry (Limit Buy within 30 days)
-        # Find first day where High >= Buy
         entry_candidates = future_data[future_data['high'] >= buy_price]
         if len(entry_candidates) == 0: continue
         
@@ -140,55 +179,73 @@ def generate_labels(df, pattern_type):
         close_np = sim_data['close'].values
         ma_np = sim_data['ma20'].values
         
-        pnl, duration = simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_price)
-        
-        score = (pnl * 100) / duration
-        
-        trade_results.append({
-            'sid': sid,
-            'date': signal_date,
-            'actual_return': pnl,
-            'duration': duration,
-            'score': score
-        })
-        
-    if not trade_results:
-        return {}
-        
-    # Convert to DF to calculate quantiles
-    res_df = pd.DataFrame(trade_results)
-    
-    # Calculate Quartiles
-    q25 = res_df['score'].quantile(0.25)
-    q50 = res_df['score'].quantile(0.50)
-    q75 = res_df['score'].quantile(0.75)
-    
-    logger.info(f"Score Quartiles for {pattern_type}: 25%={q25:.2f}, 50%={q50:.2f}, 75%={q75:.2f}")
-    
-    trade_lookup = {}
-    for r in trade_results:
-        s = r['score']
-        if s >= q75:
-            label = 'A'
-            is_investable = 1
-        elif s >= q50:
-            label = 'B'
-            is_investable = 1 # Treat B as investable? Plan said A/B.
-        elif s >= q25:
-            label = 'C'
-            is_investable = 0
-        else:
-            label = 'D'
-            is_investable = 0
+        # Simulate ALL exit modes for this signal
+        for mode in exit_modes:
+            if mode['type'] == 'fixed':
+                pnl, duration = simulate_trade_fixed(
+                    high_np, low_np, close_np, buy_price, stop_price,
+                    r_mult=mode['r_mult'], time_exit=mode['time_exit']
+                )
+            else:  # trailing
+                pnl, duration = simulate_trade_trailing(
+                    high_np, low_np, close_np, ma_np, buy_price, stop_price,
+                    trigger_r=mode['trigger_r']
+                )
             
-        trade_lookup[(r['sid'], r['date'])] = {
-            'actual_return': r['actual_return'],
-            'score': s,
-            'label_abcd': label,
-            'is_winner': is_investable # Mapping is_winner to is_investable for compatibility
-        }
+            score = (pnl * 100) / duration
+            
+            all_trade_results[mode['name']].append({
+                'sid': sid,
+                'date': signal_date,
+                'actual_return': pnl,
+                'duration': duration,
+                'score': score
+            })
+    
+    # Now calculate quartiles PER exit mode and assign labels
+    final_lookup = {}
+    
+    for exit_mode_name, trade_results in all_trade_results.items():
+        if not trade_results:
+            logger.info(f"No results for {pattern_type} + {exit_mode_name}")
+            continue
+            
+        # Convert to DF to calculate quantiles
+        res_df = pd.DataFrame(trade_results)
         
-    return trade_lookup
+        # Calculate Quartiles
+        q25 = res_df['score'].quantile(0.25)
+        q50 = res_df['score'].quantile(0.50)
+        q75 = res_df['score'].quantile(0.75)
+        
+        logger.info(f"Score Quartiles for {pattern_type} + {exit_mode_name}: 25%={q25:.2f}, 50%={q50:.2f}, 75%={q75:.2f}")
+        
+        for r in trade_results:
+            s = r['score']
+            if s >= q75:
+                label = 'A'
+                is_investable = 1
+            elif s >= q50:
+                label = 'B'
+                is_investable = 1
+            elif s >= q25:
+                label = 'C'
+                is_investable = 0
+            else:
+                label = 'D'
+                is_investable = 0
+                
+            # Key: (sid, date, exit_mode)
+            key = (r['sid'], r['date'], exit_mode_name)
+            final_lookup[key] = {
+                'actual_return': r['actual_return'],
+                'score': s,
+                'label_abcd': label,
+                'is_winner': is_investable,
+                'duration': r['duration']
+            }
+    
+    return final_lookup
 
 def main():
     logger.info("="*80)
@@ -240,7 +297,7 @@ def main():
         # Generate labels (Target)
         logger.info(f"Generating labels for {pattern_type}...")
         labels = generate_labels(df_pd, pattern_type)
-        logger.info(f"  Generated {len(labels)} trade candidates")
+        logger.info(f"  Generated labels for {len(labels)} combinations (signal × exit_mode)")
         
         # Extract features
         count = 0
@@ -248,34 +305,35 @@ def main():
             sid = row['sid']
             date = row['date']
             
-            # Get label
-            label_data = labels.get((sid, date))
-            
-            # Extract features using shared module
+            # Extract features ONCE per signal (features are same across exit modes)
             features = extract_ml_features(row, pattern_type)
+            if features is None: continue
             
-            # Add metadata
-            features['sid'] = sid
-            features['date'] = date
-            
-            # Add label
-            # Add label
-            if label_data:
-                features['actual_return'] = label_data['actual_return']
-                features['is_winner'] = label_data['is_winner']
-                features['score'] = label_data['score']
-                features['label_abcd'] = label_data['label_abcd']
-            else:
-                # If no label (e.g. recent data), mark as unknown or skip
-                features['actual_return'] = 0
-                features['is_winner'] = 0
-                features['score'] = 0
-                features['label_abcd'] = 'Unknown'
-            
-            all_features.append(features)
-            count += 1
-            
-        logger.info(f"  Generated labels for {count} signals")
+            # Create ONE row per exit mode
+            for exit_mode in ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r']:
+                # Get label for this specific exit mode
+                label_data = labels.get((sid, date, exit_mode))
+                
+                if not label_data: continue
+                
+                # Combine features + labels + metadata
+                row_data = {
+                    'sid': sid,
+                    'date': date,
+                    'pattern_type': pattern_type.upper(),
+                    'exit_mode': exit_mode,
+                    **features,
+                    'actual_return': label_data['actual_return'],
+                    'duration': label_data['duration'],
+                    'score': label_data['score'],
+                    'label_abcd': label_data['label_abcd'],
+                    'is_winner': label_data['is_winner']
+                }
+                
+                all_features.append(row_data)
+                count += 1
+        
+        logger.info(f"  Extracted features for {count} rows")
 
     # Create DataFrame
     if not all_features:

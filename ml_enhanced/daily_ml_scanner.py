@@ -37,23 +37,38 @@ from src.utils.logger import setup_logger
 from src.ml.features import extract_ml_features
 
 # Configuration
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models/stock_selector.pkl')
-FEATURE_INFO_PATH = os.path.join(os.path.dirname(__file__), 'models/feature_info.pkl')
+MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
+FEATURE_INFO_PATH = os.path.join(MODEL_DIR, 'feature_info.pkl')
 OUTPUT_BASE = os.path.join(os.path.dirname(__file__), 'daily_reports')
 BACKTEST_RESULTS_PATH = os.path.join(os.path.dirname(__file__), 'results/ml_backtest_final.csv')
 
 # Setup Logger
 logger = setup_logger('daily_ml_scanner')
 
-def load_ml_model():
-    """載入 ML 模型"""
+def load_all_ml_models():
+    """載入所有 ML 模型 (9個: 3 patterns × 3 exit modes)"""
     try:
-        with open(MODEL_PATH, 'rb') as f:
-            model = pickle.load(f)
+        models = {}
+        patterns = ['cup', 'htf', 'vcp']
+        exit_modes = ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r']
+        
+        for pat in patterns:
+            for exit_mode in exit_modes:
+                model_key = f'{pat}_{exit_mode}'
+                model_path = os.path.join(MODEL_DIR, f'stock_selector_{model_key}.pkl')
+                
+                if os.path.exists(model_path):
+                    with open(model_path, 'rb') as f:
+                        models[model_key] = pickle.load(f)
+                else:
+                    logger.warning(f"⚠️ Model not found: {model_path}")
+        
+        # Load feature info
         with open(FEATURE_INFO_PATH, 'rb') as f:
             feature_info = pickle.load(f)
-        logger.info(f"ML 模型載入完成，特徵數: {len(feature_info.get('feature_cols', []))}")
-        return model, feature_info['feature_cols']
+        
+        logger.info(f"✅ 載入 {len(models)} 個 ML 模型")
+        return models, feature_info['feature_cols']
     except Exception as e:
         logger.error(f"⚠️ ML 模型載入失敗: {e}")
         return None, None
@@ -70,18 +85,37 @@ def load_backtest_results():
         logger.error(f"⚠️ 回測結果載入失敗: {e}")
         return None
 
-def predict_signal_quality(model, feature_cols, features_dict):
-    """預測訊號品質"""
-    if model is None:
-        return 0.5  # Default
+def predict_best_exit(models, feature_cols, features_dict, pattern_type):
+    """
+    預測最佳出場策略
+    Returns: (best_exit_name, best_ml_score, all_predictions_dict)
+    """
+    if models is None:
+        return 'fixed_r2_t20', 0.5, {}
     
     try:
         X = pd.DataFrame([features_dict])[feature_cols]
-        proba = model.predict_proba(X)[0][1]
-        return proba
+        
+        # 預測所有3種出場方式
+        exit_modes = ['fixed_r2_t20', 'fixed_r3_t20', 'trailing_15r']
+        predictions = {}
+        
+        for exit_mode in exit_modes:
+            model_key = f'{pattern_type}_{exit_mode}'
+            if model_key in models:
+                proba = models[model_key].predict_proba(X)[0][1]
+                predictions[exit_mode] = proba
+            else:
+                predictions[exit_mode] = 0.5  # Fallback
+        
+        # 找出最佳策略
+        best_exit = max(predictions.items(), key=lambda x: x[1])
+        
+        return best_exit[0], best_exit[1], predictions
+        
     except Exception as e:
         logger.warning(f"    ⚠️ ML 預測失敗: {e}")
-        return 0.5
+        return 'fixed_r2_t20', 0.5, {}
 
 def scan_with_ml(df, model, feature_cols):
     """掃描並添加 ML 評分"""
@@ -132,7 +166,16 @@ def scan_with_ml(df, model, feature_cols):
             row_today_htf['htf_grade'] = htf_grade
             
             features = extract_ml_features(row_today_htf, 'htf')
-            ml_proba = predict_signal_quality(model, feature_cols, features)
+            
+            # 預測最佳出場策略
+            best_exit, best_ml_score, all_preds = predict_best_exit(model, feature_cols, features, 'htf')
+            
+            # 出場策略名稱對照
+            exit_names = {
+                'fixed_r2_t20': 'Fixed R=2.0',
+                'fixed_r3_t20': 'Fixed R=3.0',
+                'trailing_15r': 'Trailing 1.5R'
+            }
             
             signals.append({
                 'date': latest_date,
@@ -145,9 +188,15 @@ def scan_with_ml(df, model, feature_cols):
                 'grade': htf_grade if htf_grade else 'C',
                 'current_price': round(row_today['close'], 2),
                 'distance_pct': round((htf_buy - row_today['close']) / htf_buy * 100, 2),
-                'ml_proba': round(ml_proba, 3),
-                'ml_selected': ml_proba >= 0.4,
-                'rs_rating': round(rs_rating, 1)
+                'ml_proba': round(best_ml_score, 3),
+                'ml_selected': best_ml_score >= 0.4,
+                'rs_rating': round(rs_rating, 1),
+                'recommended_exit': exit_names.get(best_exit, best_exit),
+                'exit_predictions': {
+                    'r2': round(all_preds.get('fixed_r2_t20', 0), 2),
+                    'r3': round(all_preds.get('fixed_r3_t20', 0), 2),
+                    'trailing': round(all_preds.get('trailing_15r', 0), 2)
+                }
             })
         
         # Detect CUP
@@ -159,7 +208,15 @@ def scan_with_ml(df, model, feature_cols):
             row_today_cup['cup_stop_price'] = cup_stop
             
             features = extract_ml_features(row_today_cup, 'cup')
-            ml_proba = predict_signal_quality(model, feature_cols, features)
+            
+            # 預測最佳出場策略
+            best_exit, best_ml_score, all_preds = predict_best_exit(model, feature_cols, features, 'cup')
+            
+            exit_names = {
+                'fixed_r2_t20': 'Fixed R=2.0',
+                'fixed_r3_t20': 'Fixed R=3.0',
+                'trailing_15r': 'Trailing 1.5R'
+            }
             
             signals.append({
                 'date': latest_date,
@@ -172,9 +229,15 @@ def scan_with_ml(df, model, feature_cols):
                 'grade': 'N/A',
                 'current_price': round(row_today['close'], 2),
                 'distance_pct': round((cup_buy - row_today['close']) / cup_buy * 100, 2),
-                'ml_proba': round(ml_proba, 3),
-                'ml_selected': ml_proba >= 0.4,
-                'rs_rating': round(rs_rating, 1)
+                'ml_proba': round(best_ml_score, 3),
+                'ml_selected': best_ml_score >= 0.4,
+                'rs_rating': round(rs_rating, 1),
+                'recommended_exit': exit_names.get(best_exit, best_exit),
+                'exit_predictions': {
+                    'r2': round(all_preds.get('fixed_r2_t20', 0), 2),
+                    'r3': round(all_preds.get('fixed_r3_t20', 0), 2),
+                    'trailing': round(all_preds.get('trailing_15r', 0), 2)
+                }
             })
 
         # Detect VCP
@@ -187,7 +250,15 @@ def scan_with_ml(df, model, feature_cols):
             row_today_vcp['vcp_stop_price'] = vcp_stop
             
             features = extract_ml_features(row_today_vcp, 'vcp')
-            ml_proba = predict_signal_quality(model, feature_cols, features)
+            
+            # 預測最佳出場策略
+            best_exit, best_ml_score, all_preds = predict_best_exit(model, feature_cols, features, 'vcp')
+            
+            exit_names = {
+                'fixed_r2_t20': 'Fixed R=2.0',
+                'fixed_r3_t20': 'Fixed R=3.0',
+                'trailing_15r': 'Trailing 1.5R'
+            }
             
             signals.append({
                 'date': latest_date,
@@ -200,9 +271,15 @@ def scan_with_ml(df, model, feature_cols):
                 'grade': 'N/A',
                 'current_price': round(row_today['close'], 2),
                 'distance_pct': round((vcp_buy - row_today['close']) / vcp_buy * 100, 2),
-                'ml_proba': round(ml_proba, 3),
-                'ml_selected': ml_proba >= 0.4,
-                'rs_rating': round(rs_rating, 1)
+                'ml_proba': round(best_ml_score, 3),
+                'ml_selected': best_ml_score >= 0.4,
+                'rs_rating': round(rs_rating, 1),
+                'recommended_exit': exit_names.get(best_exit, best_exit),
+                'exit_predictions': {
+                    'r2': round(all_preds.get('fixed_r2_t20', 0), 2),
+                    'r3': round(all_preds.get('fixed_r3_t20', 0), 2),
+                    'trailing': round(all_preds.get('trailing_15r', 0), 2)
+                }
             })
     
     total_signals = len(signals)
@@ -258,10 +335,18 @@ def scan_past_week(df, model, feature_cols, latest_date):
             # It reads e.g. row['htf_buy_price'] which exists.
             
             features = extract_ml_features(row, pat)
-            ml_proba = predict_signal_quality(model, feature_cols, features)
+            
+            # 預測最佳出場策略
+            best_exit, ml_proba, all_preds = predict_best_exit(models, feature_cols, features, pat)
             
             # Only keep if ML score is decent (e.g. >= 0.4) to show "High Quality" past signals
             if ml_proba >= 0.4:
+                exit_names = {
+                    'fixed_r2_t20': 'R=2.0',
+                    'fixed_r3_t20': 'R=3.0',
+                    'trailing_15r': 'Trail'
+                }
+                
                 past_signals.append({
                     'date': pd.to_datetime(row['date']).strftime('%Y-%m-%d'),
                     'sid': row['sid'],
@@ -270,7 +355,13 @@ def scan_past_week(df, model, feature_cols, latest_date):
                     'buy_price': round(row[buy_col], 2),
                     'stop_price': round(row[stop_col], 2),
                     'ml_proba': round(ml_proba, 3),
-                    'grade': row.get(f'{pat}_grade', 'N/A')
+                    'grade': row.get(f'{pat}_grade', 'N/A'),
+                    'recommended_exit': exit_names.get(best_exit, best_exit),
+                    'exit_predictions': {
+                        'r2': round(all_preds.get('fixed_r2_t20', 0), 2),
+                        'r3': round(all_preds.get('fixed_r3_t20', 0), 2),
+                        'trailing': round(all_preds.get('trailing_15r', 0), 2)
+                    }
                 })
     
     return past_signals
@@ -325,39 +416,39 @@ def generate_ml_report(signals, scan_date, df_full=None, past_signals=None):
             htf_ml = ml_selected[ml_selected['pattern'] == 'HTF'].sort_values('ml_proba', ascending=False)
             if not htf_ml.empty:
                 f.write(f"### 🚀 HTF 型態 ({len(htf_ml)} 檔)\n\n")
-                f.write("**推薦策略**: Fixed Exit (R=2.0, T=20)\n\n")
-                f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | Grade | ML分數 | RS Rating |\n")
-                f.write("|---------|---------|--------|--------|--------|-------|-------|--------|----------|\n")
+                f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | Grade | **推薦出場** | ML分數 | 其他選項 |\n")
+                f.write("|---------|---------|--------|--------|--------|-------|-------|------------|--------|----------|\n")
                 for _, row in htf_ml.iterrows():
+                    other_opts = f"R2:{row['exit_predictions']['r2']}, R3:{row['exit_predictions']['r3']}, Trail:{row['exit_predictions']['trailing']}"
                     f.write(f"| **{row['sid']}** | {row['name']} | {row['current_price']} | ")
                     f.write(f"{row['buy_price']} | {row['stop_price']} | {row['distance_pct']}% | ")
-                    f.write(f"{row['grade']} | **{row['ml_proba']}** | {row['rs_rating']} |\n")
+                    f.write(f"{row['grade']} | **{row['recommended_exit']}** ⭐ | **{row['ml_proba']}** | {other_opts} |\n")
                 f.write("\n")
             
             # CUP 推薦
             cup_ml = ml_selected[ml_selected['pattern'] == 'CUP'].sort_values('ml_proba', ascending=False)
             if not cup_ml.empty:
                 f.write(f"### 🏆 CUP 型態 ({len(cup_ml)} 檔)\n\n")
-                f.write("**推薦策略**: Fixed Exit (R=3.0, T=20)\n\n")
-                f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | ML分數 | RS Rating |\n")
-                f.write("|---------|---------|--------|--------|--------|-------|--------|----------|\n")
+                f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | **推薦出場** | ML分數 | 其他選項 |\n")
+                f.write("|---------|---------|--------|--------|--------|-------|------------|--------|----------|\n")
                 for _, row in cup_ml.iterrows():
+                    other_opts = f"R2:{row['exit_predictions']['r2']}, R3:{row['exit_predictions']['r3']}, Trail:{row['exit_predictions']['trailing']}"
                     f.write(f"| **{row['sid']}** | {row['name']} | {row['current_price']} | ")
                     f.write(f"{row['buy_price']} | {row['stop_price']} | {row['distance_pct']}% | ")
-                    f.write(f"**{row['ml_proba']}** | {row['rs_rating']} |\n")
+                    f.write(f"**{row['recommended_exit']}** ⭐ | **{row['ml_proba']}** | {other_opts} |\n")
                 f.write("\n")
 
             # VCP 推薦
             vcp_ml = ml_selected[ml_selected['pattern'] == 'VCP'].sort_values('ml_proba', ascending=False)
             if not vcp_ml.empty:
                 f.write(f"### 🌀 VCP 型態 ({len(vcp_ml)} 檔)\n\n")
-                f.write("**推薦策略**: Trailing Stop (1.5R trigger, MA20)\n\n")
-                f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | ML分數 | RS Rating |\n")
-                f.write("|---------|---------|--------|--------|--------|-------|--------|----------|\n")
+                f.write("| 股票代號 | 股票名稱 | 當前價 | 買入價 | 停損價 | 距離% | **推薦出場** | ML分數 | 其他選項 |\n")
+                f.write("|---------|---------|--------|--------|--------|-------|------------|--------|----------|\n")
                 for _, row in vcp_ml.iterrows():
+                    other_opts = f"R2:{row['exit_predictions']['r2']}, R3:{row['exit_predictions']['r3']}, Trail:{row['exit_predictions']['trailing']}"
                     f.write(f"| **{row['sid']}** | {row['name']} | {row['current_price']} | ")
                     f.write(f"{row['buy_price']} | {row['stop_price']} | {row['distance_pct']}% | ")
-                    f.write(f"**{row['ml_proba']}** | {row['rs_rating']} |\n")
+                    f.write(f"**{row['recommended_exit']}** ⭐ | **{row['ml_proba']}** | {other_opts} |\n")
                 f.write("\n")
             
             f.write("---\n\n")
@@ -547,8 +638,8 @@ def main():
     
     # 2. 載入 ML 模型
     logger.info("\n>>> 載入 ML 模型...")
-    model, feature_cols = load_ml_model()
-    if model is None or feature_cols is None:
+    models, feature_cols = load_all_ml_models()
+    if models is None or feature_cols is None:
         logger.error("❌ 模型或特徵列表載入失敗，停止流程。")
         return
     
@@ -563,10 +654,10 @@ def main():
     
     # 4. 掃描並評分
     logger.info("\n>>> 掃描股票訊號 (今日)...")
-    signals, scan_date = scan_with_ml(df, model, feature_cols)
+    signals, scan_date = scan_with_ml(df, models, feature_cols)
     
     logger.info("\n>>> 掃描股票訊號 (過去一週)...")
-    past_signals = scan_past_week(df, model, feature_cols, latest_date)
+    past_signals = scan_past_week(df, models, feature_cols, latest_date)
     logger.info(f"過去一週高品質訊號 (ML>=0.4): {len(past_signals)} 檔")
     
     # 5. 生成報告
