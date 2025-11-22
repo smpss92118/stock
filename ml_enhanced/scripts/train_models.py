@@ -73,7 +73,7 @@ FEATURE_COLS = [
     'atr_ratio',
     
     # Market environment (2)
-    'market_trend',        # UPDATED: now real market trend (was placeholder=1)
+    'market_trend',
     'market_volatility',   # NEW
     
     # Relative strength (1) - NEW

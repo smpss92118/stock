@@ -79,6 +79,21 @@ def simulate_trade_trailing(high_np, low_np, close_np, ma_np, buy_price, stop_pr
     duration = max(exit_idx, 1) # Avoid 0
     return pnl, duration
 
+
+def apply_group_zscore(df, cols, group_key='sid'):
+    """
+    以 group_key 分組，對指定欄位做「前值」的 expanding mean/std z-score，避免洩漏當日。
+    當 std=0 或不足資料時補 0。
+    """
+    for col in cols:
+        if col not in df.columns:
+            df[col] = np.nan
+        mean = df.groupby(group_key)[col].transform(lambda x: x.shift(1).expanding().mean())
+        std = df.groupby(group_key)[col].transform(lambda x: x.shift(1).expanding().std(ddof=0))
+        df[col] = (df[col] - mean) / std.replace(0, np.nan)
+    df[cols] = df[cols].fillna(0)
+    return df
+
 def simulate_trade_fixed(high_np, low_np, close_np, buy_price, stop_price, r_mult=2.0, time_exit=20):
     """
     Simulate trade with Fixed R-multiple Target and Time Exit.
@@ -319,6 +334,17 @@ def main():
     logger.info("Calculating technical indicators for all stocks...")
     # Use group_keys=False to avoid FutureWarning while keeping all columns
     df_pd = df_pd.groupby('sid', group_keys=False).apply(lambda x: calculate_technical_indicators(x)).reset_index(drop=True)
+
+    # Apply z-score to drift-heavy columns (per sid, using only past data via shift(1))
+    drift_cols = [
+        'foreign_net_sum_3d', 'foreign_net_sum_5d', 'foreign_net_sum_10d', 'foreign_net_sum_20d',
+        'total_net_sum_3d', 'total_net_sum_5d', 'total_net_sum_10d', 'total_net_sum_20d',
+        'volatility', 'atr_ratio', 'price_vs_ma20', 'price_vs_ma50',
+        'volume_ratio_ma20', 'volume_ratio_ma50',
+        'momentum_5d', 'momentum_20d', 'rsi_14'
+    ]
+    logger.info("Applying per-sid z-score to drift-prone features...")
+    df_pd = apply_group_zscore(df_pd, drift_cols, group_key='sid')
     
     # Ensure MA20 is present for simulation
     if 'ma20' not in df_pd.columns:
