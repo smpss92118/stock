@@ -137,22 +137,25 @@ is_cup, cup_buy_price, cup_stop_price, cup_2R, cup_3R, cup_4R, cup_stop
    ```
 
 3. **標籤生成邏輯** ([`generate_labels`](../scripts/prepare_ml_data.py#L37-L129)):
-   
-   **Winner 定義**:
-   - 未來 20 天內最大漲幅 > 10%
-   - 且在達到 10% 漲幅前，未觸及停損
+
+   **Winner 定義** (基於 Trailing Stop 模擬):
+   - 使用 Trailing Stop 策略模擬交易，按獲利率與持倉天數計算 `Score = Profit% / Duration`
+   - 按 Score 分位數分級（A/B/C/D），其中 A/B 級標記為 `is_winner=1`，C/D 級為 `0`
+   - **注意**: 此定義不同於簡單的「10% 漲幅」，而是基於策略實際績效的動態分級
 
    ```python
-   # 檢查是否先達到目標或先觸及停損
-   for day in post_entry:
-       if day['low'] <= stop_price:
-           stop_hit = True
-           break
-       if day['high'] >= buy_price * 1.10:
-           target_hit = True
-           break
-   
-   is_winner = 1 if (target_hit and not stop_hit) else 0
+   # 實際實現邏輯（簡化版）
+   # 1. 模擬 Trailing Stop 出場
+   exit_price = simulate_trailing_stop(entry, stop_price, MA)
+   profit_pct = (exit_price - buy_price) / buy_price
+   duration_days = exit_date - entry_date
+
+   # 2. 計算績效分數
+   score = profit_pct / duration_days if duration_days > 0 else 0
+
+   # 3. 分級（基於分位數）
+   grade = quantile_rank(score)  # A/B/C/D
+   is_winner = 1 if grade in ['A', 'B'] else 0
    ```
 
 **輸出**: `ml_enhanced/data/ml_features.csv`
@@ -198,15 +201,45 @@ is_cup, cup_buy_price, cup_stop_price, cup_2R, cup_3R, cup_4R, cup_stop
 
 ### 特徵列表（24 features）
 
-- **型態品質 (3)**: `grade_numeric`, `distance_to_buy_pct`, `risk_pct`
-- **成交量 (4)**: `volume_ratio_ma20`, `volume_ratio_ma50`, `volume_surge`, `volume_trend_5d`（需 `pattern_analysis_result.csv` 內含真實 volume）
-- **動能 (4)**: `momentum_5d`, `momentum_20d`, `price_vs_ma20`, `price_vs_ma50`
-- **RSI (2)**: `rsi_14`（EMA 版 14 期 RSI，缺資料時以 50 補），`rsi_divergence`（20 日新高但 RSI 未創高）
-- **技術面 (3)**: `ma_trend`（MA20 > MA50）、`volatility`（20 日報酬率標準差）、`atr_ratio`（14 日 High-Low 平均 / Close）
-- **市場環境 (2)**: `market_trend`（加權收盤 > market_ma200）、`market_volatility`（`market_data.csv` 中的波動度，缺值回退 0.02）
-- **相對強弱 (1)**: `rs_rating`（全市場 52 週報酬率百分位）
-- **型態專屬 (1)**: `consolidation_days`（CUP/VCP 預設 10）
-- **訊號密度 (2)**: `signal_count_ma10`, `signal_count_ma60`（目前仍為 placeholder=0）
+- **型態品質 (3)**:
+  - `grade_numeric`: HTF 的分級評分（A=3, B=2, C=1；CUP/VCP 預設 2）
+  - `distance_to_buy_pct`: 當前價格距離突破價的百分比差距
+  - `risk_pct`: 風險百分比 = (buy_price - stop_price) / buy_price × 100
+
+- **成交量 (4)**:
+  - `volume_ratio_ma20`: 當日成交量 / MA20 成交量
+  - `volume_ratio_ma50`: 當日成交量 / MA50 成交量
+  - `volume_surge`: 是否爆量的二值指標
+  - `volume_trend_5d`: 5 日成交量趨勢
+
+- **動能 (4)**:
+  - `momentum_5d`: 5 日價格動能 (%) = (close[t] - close[t-5]) / close[t-5]
+  - `momentum_20d`: 20 日價格動能 (%)
+  - `price_vs_ma20`: 收盤價相對 MA20 位置 (%)
+  - `price_vs_ma50`: 收盤價相對 MA50 位置 (%)
+
+- **RSI (2)**:
+  - `rsi_14`: 14 期 EMA 版 RSI（資料不足時回退 50）
+  - `rsi_divergence`: 20 日新高但 RSI 未創新高的背離指標
+
+- **技術面 (3)**:
+  - `ma_trend`: MA20 > MA50 的布林值（上升趨勢）
+  - `volatility`: 20 日報酬率的標準差
+  - `atr_ratio`: 真實波幅比 = 14 日 High-Low 平均 / Close
+
+- **市場環境 (2)**:
+  - `market_trend`: 加權指數收盤 > MA200 的布林值
+  - `market_volatility`: 來自 `market_data.csv` 的市場波動度（缺值回退 0.02）
+
+- **相對強弱 (1)**:
+  - `rs_rating`: 相對強度評級 = 全市場 52 週報酬率百分位
+
+- **型態專屬 (1)**:
+  - `consolidation_days`: 整理天數（CUP/VCP 預設 10）
+
+- **訊號密度 (2)** ⚠️ **未實現**:
+  - `signal_count_ma10`: 10 日內訊號計數（目前為 placeholder=0，待實現）
+  - `signal_count_ma60`: 60 日內訊號計數（目前為 placeholder=0，待實現）
 
 > `pattern_type`, `buy_price`, `stop_price` 會保留在 `ml_features.csv` 方便分析，但不在 `FEATURE_COLS` 內供模型訓練。
 

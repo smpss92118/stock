@@ -77,14 +77,15 @@
 
 | 參數名稱 | 當前值 | 位置 | 說明 |
 |---------|--------|------|------|
-| `min_up_ratio` | 0.6 | L6 | 上漲幅度最小值（60%）|
+| `min_up_ratio` | 0.8 | L6 | 上漲幅度最小值（80%）|
 | `max_pullback` | 0.25 | L7 | 回調最大值（25%）|
 | `min_flag_days` | 3 | L8 | 旗形最小天數 |
 | `max_flag_days` | 12 | L9 | 旗形最大天數 |
 | `rs_rating_threshold` | 0.0 | L21 | RS Rating 門檻 |
 | `min_window` | 20 | L17 | 最小資料天數 |
-| **Grade A 條件** | - | L71-73 | pole>90%, pullback<15%, vol_drop>50% |
-| **Grade B 條件** | - | L74-75 | pole>90%, pullback<20% |
+| **Grade A 條件** | - | L71-73 | Pole>90%, Pullback<15%, Vol_drop>50% |
+| **Grade B 條件** | - | L74-75 | Pole>90%, 15%≤Pullback<20% |
+| **Grade C 條件** | - | L76 | 20%≤Pullback≤25% |
 
 ### 優化建議
 

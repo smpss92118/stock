@@ -83,35 +83,39 @@ signals = df.filter(
 **進場條件** (同時滿足):
 
 1. **價格觸發**: 訊號日後的任一天，`high >= buy_price`
-2. **追蹤窗口**: 訊號發生後 **30 天內**觸發
+2. **追蹤窗口**: 訊號發生後 **30 個交易日內**觸發
 3. **首次觸發**: 取第一次觸發的日期
 
 **程式碼實現**：
 
 ```python
-# 訊號發生後 30 天內（sig_idx + 31 = 當天 + 30 天）
+# 訊號發生後 30 個交易日內
+# sig_idx + 31 = sig_idx 之後的 30 個數據點（包含當天後的第一天到第 30 天）
 future_end = min(sig_idx + 31, len(high_np))
-future_high = high_np[sig_idx + 1 : future_end]
+future_high = high_np[sig_idx + 1 : future_end]  # 從隔日開始
 
 # 找到第一次突破 buy_price 的日期
 entry_candidates_idx = np.where(future_high >= buy)[0]
-if entry_candidates_idx.size == 0: continue  # 30 天內未觸發，放棄
+if entry_candidates_idx.size == 0: continue  # 30 天內未觸發，放棄訊號
 
-entry_rel = entry_candidates_idx[0]  # 第一次觸發
-entry_abs = sig_idx + 1 + entry_rel
+entry_rel = entry_candidates_idx[0]  # 第一次觸發的相對位置
+entry_abs = sig_idx + 1 + entry_rel  # 轉換為絕對位置
 entry_date = date_list[entry_abs]
 ```
 
 **範例場景**：
 
 ```
-訊號日: 2024-01-01
+訊號日: 2024-01-01 (sig_idx)
 買入價: $100
 停損價: $90
 
 Day 1 (01-02): High $98 → 未觸發
 Day 5 (01-06): High $102 → ✅ 進場！entry_date = 01-06
+Day 31 (02-01): 超過 30 天，此時才突破也不進場
 ```
+
+**重點**: 追蹤窗口是嚴格的 30 個交易日（不含訊號日）
 
 **關鍵設計**：
 - **限價單概念**：等待價格突破才進場，避免追高
@@ -385,11 +389,20 @@ INITIAL_CAPITAL = 1_000_000  # 100萬
 ```python
 if current_cash >= position_size:
     current_cash -= position_size  # 扣除現金
+    # 記錄部位資訊
+    position = {
+        'entry_date': entry_date,
+        'entry_price': buy_price,
+        'size': position_size,
+        'cost': position_size
+    }
 ```
 
 **出場時** (T+0 假設):
 
 ```python
+# 計算損益
+profit = position_size * (exit_price - entry_price) / entry_price
 return_cash = position_size + profit  # 本金 + 損益
 current_cash += return_cash  # 立即回收
 ```
@@ -398,21 +411,41 @@ current_cash += return_cash  # 立即回收
 - ✅ 每次進場前**必須**檢查現金是否足夠
 - ✅ 不允許負現金（已驗證，整個回測期間無負現金）
 
+### FIFO 資金分配原則
+
+**先進先出邏輯**：當同一日期有多個訊號，按進場時間順序分配資金。
+
+```python
+# 進場候選訊號按 entry_date 排序（FIFO）
+candidates.sort(key=lambda x: x['entry_date'])
+
+# 資金分配順序
+for candidate in sorted_candidates:
+    if current_cash >= position_size and len(active_positions) < MAX_POSITIONS:
+        execute_trade(candidate)
+```
+
+**實務含義**：
+- 確保優先滿足最早進場的機會
+- 資金分配順序公平，避免遺漏時間敏感的訊號
+
 ### 資金利用率
 
 **計算公式**：
 
 ```python
-invested = sum(active_positions['cost'])
+invested = sum(active_positions['cost'])  # 已投入資本
+total_equity = invested + current_cash    # 總資產
 capital_utilization = invested / INITIAL_CAPITAL * 100%
 ```
 
 **正常範圍**：
 - 無 Pyramiding: 約 100%
-- 有 Pyramiding: 可能超過 100%（因為總資產包含未實現收益）
+- 有 Pyramiding: 可能超過 100%（因為複利增加總資產）
 
 **當前實測**：
 - 平均資金利用率: **148.8%** (允許 Pyramiding + 複利效應)
+- **複利效應解釋**: 隨著獲利增加，每次進場的部位大小也隨之增加，導致總投入資本超過初始資金
 
 ---
 
